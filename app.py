@@ -64,6 +64,7 @@ def get_prev_encp(session):
                     if a:
                         encp = a.get("data-pprm-encp")
                         if day - 1 == today:
+                            st.write(f"DEBUG: 前日encp取得={encp}")
                             return encp
                 day += colspan
     return None
@@ -97,25 +98,43 @@ def get_live_info(session):
     return None, None
 
 # =========================
-# 前日処理（修正版）
+# 前日処理（デバッグ強化）
 # =========================
 def run_prev_mode(session, encp):
 
     url = f"https://keirin.jp/pc/racelist?encp={encp}"
     html = session.get(url, headers=HEADERS).text
 
-    # ★ 修正済み（確実に拾う）
-    match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{.*?\})\s*;", html, re.DOTALL)
+    st.write(f"DEBUG: HTML長さ={len(html)}")
+
+    # PJ0302存在チェック
+    if "PJ0302" not in html:
+        st.write("DEBUG: PJ0302がHTMLに存在しない")
+    else:
+        st.write("DEBUG: PJ0302文字列は存在")
+
+    # JSON抽出（強化版）
+    match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
 
     if not match:
+        st.write("DEBUG: 正規表現ヒットしない")
         return "データ取得失敗"
 
-    data = json.loads(match.group(1))
+    json_str = match.group(1)
+
+    st.write(f"DEBUG: JSON長さ={len(json_str)}")
+
+    try:
+        data = json.loads(json_str)
+    except Exception as e:
+        st.write(f"DEBUG: JSONパース失敗: {e}")
+        return "JSONパース失敗"
 
     outputs = []
 
     for gaitei in data["J0302data"]["J0302gaitei"]:
         for p in gaitei["J0302sensyu"]:
+            st.write(f"DEBUG: {p['playerNm']} / {p['hukenName']}")
             if "岡　山" in p["hukenName"]:
                 name = p["playerNm"]
                 text = f"""{TARGET_PLACE}競輪
