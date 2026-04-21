@@ -73,51 +73,49 @@ def get_start_info(row):
     day = 1
     result = []
 
-    print(f"\n--- [LOG] get_start_info 開始 (場所: {TARGET_PRE_PLACE}) ---")
-    for td in tds:
-        classes = td.get("class", [])
-        colspan = int(td.get("colspan", 1))
-        inner_text = td.text.strip()
-        
-        # ログ: プログラム上のカウントと実際のセルの情報を出力
-        print(f"DEBUG: counter={day}日目 | class={classes} | colspan={colspan} | text='{inner_text}'")
+    # --- [LOG] 玉野の行のセルを1つずつ確認 ---
+    st.write(f"DEBUG: {TARGET_PRE_PLACE}の行から {len(tds)} 個のセルを読み込みました")
 
+    for td in tds:
+        # 開催判定クラスの確認
+        classes = td.get("class", [])
         if "bk_kaisai" in classes:
             a = td.find("a")
-            if a:
-                encp = a.get("data-pprm-encp")
-                print(f"  => 開催開始を検知! 開始日判定: {day}")
-                result.append({
-                    "start": day,
-                    "prev": day - 1,
-                    "encp": encp
-                })
+            encp = a.get("data-pprm-encp") if a else None
+            
+            # ログ: 開催があると判定した日
+            st.write(f"DEBUG: 開催セル検知! プログラム上の日付カウント: {day}日目 (クラス: {classes})")
 
-        day += colspan
-    print("--- [LOG] get_start_info 終了 ---\n")
+            result.append({
+                "start": day,
+                "prev": day - 1,
+                "encp": encp
+            })
+
+        day += int(td.get("colspan", 1))
 
     return result
 
 def get_prev_target_encp(year, month, today):
-    print(f"--- [LOG] get_prev_target_encp (本日: {today}日) ---")
+
     html = get_html(year, month)
     row = get_target_row(html, TARGET_PRE_PLACE)
 
     if row is None:
-        print(f"ERROR: {TARGET_PRE_PLACE} の行が見つかりませんでした。")
+        st.write(f"DEBUG: {TARGET_PRE_PLACE} の行が見つかりません")
         return None
 
     infos = get_start_info(row)
 
     # 当月
     for r in infos:
-        print(f"判定チェック: 開催前日={r['prev']} vs 本日={today}")
+        # ログ: 前日判定の比較
+        st.write(f"DEBUG: 比較中... 開催前日判定:{r['prev']} vs 今日の日付:{today}")
         if r["prev"] == today:
-            print("  => 一致! 前日処理を実行します。")
+            st.write("DEBUG: 一致しました！")
             return r["encp"]
 
     # 月跨ぎ
-    print("当月内に該当なし。月跨ぎを確認します。")
     next_month = month + 1
     next_year = year
 
@@ -134,7 +132,7 @@ def get_prev_target_encp(year, month, today):
 
         for r in infos_next:
             if r["start"] == 1 and today == last_day:
-                print("  => 月跨ぎでの前日一致を検知!")
+                st.write("DEBUG: 月跨ぎで一致しました！")
                 return r["encp"]
 
     return None
@@ -202,9 +200,9 @@ def get_data():
         today = now.day
         month = now.month
         year = now.year
-        
-        print(f"\n[SYSTEM LOG] 実行時刻: {now.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"[SYSTEM LOG] 判定用日付: {year}年{month}月{today}日")
+
+        # --- [LOG] 現在の判定基準 ---
+        st.write(f"DEBUG: 判定に使用している今日の日付: {today}日")
 
         # ===== TOP =====
         html = requests.get(
@@ -229,7 +227,7 @@ def get_data():
         # ★ 開催中
         # =========================
         if temp_enc:
-            print("LOG: 開催中データを検知しました。")
+
             jsj001 = requests.get(
                 f"https://keirin.jp/pc/json?encp={temp_enc}&type=JSJ001",
                 headers=HEADERS,
@@ -241,6 +239,9 @@ def get_data():
                 return "JSJ001取得失敗"
 
             title = data.get("raceName", "")
+            grade = convert_grade(data.get("imgGradeAlt", ""))
+            day_type = convert_day_type_from_icon(data.get("imgFuka1Alt", ""))
+            day_label = get_day_label(data.get("C0201kaisai", []))
             place_name = build_place_name(title, TARGET_PLACE)
 
             return f"{place_name}\n開催中"
@@ -248,7 +249,6 @@ def get_data():
         # =========================
         # ★ 前日処理
         # =========================
-        print("LOG: 開催中ではないため、前日判定へ移行します。")
         encp = get_prev_target_encp(year, month, today)
 
         if not encp:
