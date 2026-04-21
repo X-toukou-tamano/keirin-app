@@ -4,7 +4,7 @@ import requests
 import re
 import json
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import calendar
 
 # =========================
@@ -73,17 +73,14 @@ def get_start_info(row):
     day = 1
     result = []
 
-    # --- [LOG] 玉野の行のセルを1つずつ確認 ---
     st.write(f"DEBUG: {TARGET_PRE_PLACE}の行から {len(tds)} 個のセルを読み込みました")
 
     for td in tds:
-        # 開催判定クラスの確認
         classes = td.get("class", [])
         if "bk_kaisai" in classes:
             a = td.find("a")
             encp = a.get("data-pprm-encp") if a else None
             
-            # ログ: 開催があると判定した日
             st.write(f"DEBUG: 開催セル検知! プログラム上の日付カウント: {day}日目 (クラス: {classes})")
 
             result.append({
@@ -109,7 +106,6 @@ def get_prev_target_encp(year, month, today):
 
     # 当月
     for r in infos:
-        # ログ: 前日判定の比較
         st.write(f"DEBUG: 比較中... 開催前日判定:{r['prev']} vs 今日の日付:{today}")
         if r["prev"] == today:
             st.write("DEBUG: 一致しました！")
@@ -196,12 +192,12 @@ def build_pre_comment(players, html):
 # =========================
 def get_data():
     try:
-        now = datetime.now()
+        # 【追加】日本時間(JST)を強制的に取得
+        now = datetime.now(timezone(timedelta(hours=9)))
         today = now.day
         month = now.month
         year = now.year
 
-        # --- [LOG] 現在の判定基準 ---
         st.write(f"DEBUG: 判定に使用している今日の日付: {today}日")
 
         # ===== TOP =====
