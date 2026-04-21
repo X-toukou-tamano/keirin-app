@@ -36,18 +36,13 @@ def convert_grade(grade):
 def build_place_name(place):
     return f"{place}市営{place}競輪"
 
-# ★ここ修正（flgSelect使わない）
 def get_day_label(kaisai_list):
     days = []
     for k in kaisai_list:
         txt = k.get("txtDaily", "")
         if txt:
             days.append(txt.replace("(", "").replace(")", ""))
-
-    if not days:
-        return ""
-
-    return days[-1]  # ←最後＝最新日
+    return days[-1] if days else ""
 
 # ===== 日別条件 =====
 def is_day2_target(name):
@@ -107,6 +102,9 @@ def get_data():
         day_type = convert_day_type_from_icon(data.get("imgFuka1Alt", ""))
         day_label = get_day_label(data.get("C0201kaisai", []))
         place_name = build_place_name(TARGET_PLACE)
+
+        # ★ここが強いポイント
+        day_num = len(data.get("C0201kaisai", []))
 
         result_json = requests.get(
             f"https://keirin.jp/pc/json?encp={enc}&disp=PJ0306&type=JSJ018",
@@ -177,16 +175,16 @@ def get_data():
 """
             outputs.append(text_result)
 
-            # ===== コメント条件 =====
+            # ===== 強い日別コメント判定 =====
             comment_flag = False
 
-            if "初日" in day_label:
+            if day_num == 1:
                 comment_flag = True
-            elif "2日目" in day_label and is_day2_target(race_name):
+            elif day_num == 2 and is_day2_target(race_name):
                 comment_flag = True
-            elif "3日目" in day_label and is_day3_target(race_name):
+            elif day_num == 3 and is_day3_target(race_name):
                 comment_flag = True
-            elif ("最終日" in day_label or "4日目" in day_label) and is_day4_target(race_name):
+            elif day_num >= 4 and is_day4_target(race_name):
                 comment_flag = True
 
             if comment_flag:
