@@ -7,63 +7,272 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, timezone
 
 # =========================
-# 設定
+# 自動更新（3分）
 # =========================
 st_autorefresh(interval=180000, key="refresh")
-st.title("競輪結果（玉野）Cookie検証")
 
-# ターゲット（変更なし）
-TARGET_PRE_PLACE = "玉野"
+st.title("玉野競輪 投稿生成アプリ")
+
+TARGET_PLACE = "玉野"
+HASHTAGS = "#玉野けいりん #チャリロトバンク玉野 #競輪"
+
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0",
     "Accept": "application/json, text/javascript, */*; q=0.01",
-    "X-Requested-With": "XMLHttpRequest",
+    "X-Requested-With": "XMLHttpRequest"
 }
 
-# 画像から取得したCookie（一時的にハードコードして検証）
-# ※有効期限が切れると使えなくなりますが、まずはこれで「-1」が消えるか見ます
-DEBUG_COOKIE = {
-    "analysis-cookie": "AeXiHhIE5K9UopwtXGagIr5MoXJFVMmCzwHqSi90FYY7SaWkKliEIKUrnIkNuVzX3"
-}
+# =========================
+# 共通
+# =========================
+def normalize_name(name):
+    return name.replace("　", "").replace(" ", "")
 
-def get_prev_target_encp():
-    # 2026/04/22 のスケジュールから玉野の encp を引く（検証用）
-    url = "https://keirin.jp/pc/raceschedule?scyy=2026&scym=04"
-    res = requests.get(url, headers=HEADERS).text
-    soup = BeautifulSoup(res, "html.parser")
+def format_name(name):
+    return "#" + normalize_name(name)
+
+def convert_day_type_from_icon(val):
+    return {"01": "D", "02": "N", "03": "MID"}.get(val, "")
+
+def convert_grade(grade):
+    return grade.replace("1","Ⅰ").replace("2","Ⅱ").replace("3","Ⅲ").replace("4","Ⅳ")
+
+def build_place_name(place):
+    return f"{place}市営{place}競輪"
+
+def get_day_label(kaisai_list):
+    for k in kaisai_list:
+        if k["flgSelect"]:
+            return k["txtDaily"].replace("(", "").replace(")", "")
+    return ""
+
+# =========================
+# 前日ロジック
+# =========================
+def get_html(session, year, month):
+    url = f"https://keirin.jp/pc/raceschedule?scyy={year}&scym={str(month).zfill(2)}"
+    return session.get(url, headers=HEADERS).text
+
+def get_target_row(html):
+    soup = BeautifulSoup(html, "html.parser")
     for row in soup.find_all("tr"):
-        if TARGET_PRE_PLACE in row.text:
-            a = row.find("a", {"data-pprm-encp": True})
-            if a: return a.get("data-pprm-encp")
+        if TARGET_PLACE in row.text:
+            return row
     return None
 
-def verify_jsj_with_cookie():
-    encp = get_prev_target_encp()
-    if not encp: return "encp取得失敗"
-    
-    # セッションを作成してCookieとRefererをセット
-    session = requests.Session()
-    session.cookies.update(DEBUG_COOKIE)
-    
-    referer = f"https://keirin.jp/pc/participationlist?encp={encp}"
-    url = f"https://keirin.jp/pc/json?encp={encp}&type=JSJ008&kanyusyaflg=1&kaisaikbikbn=1"
-    
-    st.write(f"DEBUG: 実行URL: {url}")
-    
-    res = session.get(url, headers={**HEADERS, "Referer": referer})
-    data = res.json()
-    
-    st.write(f"DEBUG: resultCd: {data.get('resultCd')}")
-    if data.get("resultCd") == 0:
-        st.success("Cookieによる認証突破に成功しました！")
-        st.write(f"DEBUG: 取得キー: {list(data.keys())}")
-        # 岡山選手がいるかチラ見
-        members = data.get("MemberSelectionList", {}).get("MemberSelection", [])
-        st.write(f"DEBUG: 選手数: {len(members)}")
-    else:
-        st.error(f"認証失敗: {data.get('message')}")
-    
-    return "検証終了"
+def get_start_info(row):
+    tds = row.find_all("td", class_="td_day")
+    day = 1
+    result = []
+    for td in tds:
+        classes = td.get("class", [])
+        colspan = int(td.get("colspan", 1))
+        if "bk_kaisai" in classes:
+            a = td.find("a")
+            if a:
+                encp = a.get("data-pprm-encp")
+                result.append({"start": day, "prev": day - 1, "encp": encp})
+        day += colspan
+    return result
 
-# 実行
-st.code(verify_jsj_with_cookie())
+def get_prev_encp(session):
+    now = datetime.now(timezone(timedelta(hours=9)))
+    today, month, year = now.day, now.month, now.year
+
+    html = get_html(session, year, month)
+    row = get_target_row(html)
+    if not row:
+        return None
+
+    infos = get_start_info(row)
+    for r in infos:
+        if r["prev"] == today:
+            return r["encp"]
+
+    return None
+
+def extract_okayama_players(html):
+    soup = BeautifulSoup(html, "html.parser")
+    players = []
+    for row in soup.find_all("tr"):
+        tds = row.find_all("td")
+        if len(tds) < 3:
+            continue
+        if "岡山" in tds[2].get_text():
+            players.append(tds[2].get_text(strip=True))
+    return players
+
+def extract_event_info(html):
+    soup = BeautifulSoup(html, "html.parser")
+    title, grade = "", ""
+    title_tag = soup.find("div", class_="raceTitle")
+    if title_tag:
+        title = title_tag.get_text(strip=True)
+    grade_img = soup.find("img", class_="gradeIconSize")
+    if grade_img:
+        grade = grade_img.get("alt", "")
+    return title, grade
+
+def run_prev_mode(session, encp):
+    url = f"https://keirin.jp/pc/racelist?encp={encp}&dkbn=1"
+    html = session.get(url, headers=HEADERS).text
+
+    players = extract_okayama_players(html)
+    if not players:
+        return "岡山選手なし"
+
+    title, grade = extract_event_info(html)
+
+    outputs = []
+    for p in players:
+        text = f"""{TARGET_PLACE}競輪
+「{title}」({grade})
+地元選手より、意気込みをいただきました！
+{p}選手 「」
+{HASHTAGS}
+"""
+        outputs.append(text)
+
+    return "\n\n----------------------\n\n".join(outputs)
+
+# =========================
+# 開催中ロジック
+# =========================
+def get_top_json(session):
+    html = session.get("https://keirin.jp/pc/top", headers=HEADERS).text
+    match = re.search(r"var pc0101_json = (\{.*?\});", html, re.DOTALL)
+    if not match:
+        return None
+    return json.loads(match.group(1))
+
+def get_live_encp(session):
+    top = get_top_json(session)
+    if not top:
+        return None
+
+    for r in top["RaceList"]:
+        if r["keirinjoName"] == TARGET_PLACE:
+            return r["touhyouLivePara"]
+
+    return None
+
+def run_live_mode(session, temp_enc):
+    jsj001 = session.get(
+        f"https://keirin.jp/pc/json?encp={temp_enc}&type=JSJ001",
+        headers=HEADERS
+    ).json()
+
+    if "C0201data" not in jsj001:
+        return "開催情報取得失敗"
+
+    data = jsj001["C0201data"]
+
+    enc = data["encSelParaR"]
+    enc_map = {f"{i+1}R": r["encParaR"] for i, r in enumerate(data["C0201race"])}
+
+    title = data["raceName"]
+    grade = convert_grade(data["imgGradeAlt"])
+    day_type = convert_day_type_from_icon(data["imgFuka1Alt"])
+    day_label = get_day_label(data["C0201kaisai"])
+    place_name = build_place_name(TARGET_PLACE)
+
+    result_json = session.get(
+        f"https://keirin.jp/pc/json?encp={enc}&disp=PJ0306&type=JSJ018",
+        headers=HEADERS
+    ).json()
+
+    if "resultList" not in result_json:
+        return "結果取得失敗"
+
+    outputs = []
+
+    for race in result_json["resultList"]:
+        if not race["tyakui1List"]:
+            continue
+
+        race_no = race["rclblRaceNo"]
+
+        result_raw = []
+        for block, pos in [
+            ("tyakui1List", 1),
+            ("tyakui2List", 2),
+            ("tyakui3List", 3)
+        ]:
+            for p in race.get(block, []):
+                result_raw.append((pos, p["rclblSensyuName"]))
+
+        enc_r = enc_map.get(race_no)
+
+        player_json = session.get(
+            f"https://keirin.jp/pc/json?encp={enc_r}&type=JSJ006",
+            headers=HEADERS
+        ).json()
+
+        player_dict = {}
+        for p in player_json.get("sensyuTypeInfo", []):
+            key = normalize_name(p["sensyuName"])
+            player_dict[key] = {
+                "pref": p["huKen"].replace("　", ""),
+                "term": p["sotugyouki"]
+            }
+
+        lines = []
+        for pos, raw_name in result_raw:
+            key = normalize_name(raw_name)
+            info = player_dict.get(key, {"pref": "不明", "term": "不明"})
+            lines.append(
+                f"{pos}着　{format_name(raw_name)} （{info['pref']}）{info['term']}期"
+            )
+
+        winner = format_name(result_raw[0][1])
+
+        text = f"""{place_name}
+「{title}」({grade}{day_type})
+{day_label}　第{race_no}
+
+{chr(10).join(lines)}
+
+{winner} おめでとうございます！
+{HASHTAGS}
+"""
+        outputs.append(text)
+
+    return "\n\n----------------------\n\n".join(outputs)
+
+# =========================
+# メイン制御
+# =========================
+def main():
+    try:
+        session = requests.Session()
+
+        # 認証（前日コード互換）
+        top_res = session.get("https://keirin.jp/pc/top", headers=HEADERS)
+        match = re.search(r"var pc0101_json = (\{.*?\});", top_res.text, re.DOTALL)
+        if match:
+            top = json.loads(match.group(1))
+            live_list = top.get("RaceList", [])
+            if live_list:
+                auth_encp = live_list[0].get("touhyouLivePara")
+                auth_url = f"https://keirin.jp/pc/json?encp={auth_encp}&type=JSJ048&kanyusyaflg=1&kaisaikbikbn=1"
+                session.get(auth_url, headers=HEADERS)
+
+        # ① 開催中優先
+        live_encp = get_live_encp(session)
+        if live_encp:
+            return run_live_mode(session, live_encp)
+
+        # ② 前日
+        prev_encp = get_prev_encp(session)
+        if prev_encp:
+            return run_prev_mode(session, prev_encp)
+
+        return "開催なし"
+
+    except Exception as e:
+        return f"エラー: {e}"
+
+# =========================
+# 表示
+# =========================
+st.code(main(), language="text")
