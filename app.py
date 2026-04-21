@@ -20,7 +20,7 @@ TARGET_PRE_PLACE = "玉野"
 HASHTAGS = "#玉野けいりん #チャリロトバンク玉野 #競輪"
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
 # =========================
@@ -69,17 +69,12 @@ def get_target_row(html, place):
 
 def get_start_info(row):
     tds = row.find_all("td", class_="td_day")
-
     day = 1
     result = []
-
     st.write(f"DEBUG: {TARGET_PRE_PLACE}の行から {len(tds)} 個のセルを読み込みました")
-
     for td in tds:
         classes = td.get("class", [])
         colspan = int(td.get("colspan", 1))
-        inner_text = td.text.strip()
-        
         if "bk_kaisai" in classes:
             a = td.find("a")
             if a:
@@ -90,49 +85,22 @@ def get_start_info(row):
                     "prev": day - 1,
                     "encp": encp
                 })
-
         day += colspan
-
     return result
 
 def get_prev_target_encp(year, month, today):
     st.write(f"--- 判定開始 (今日の日付: {today}) ---")
     html = get_html(year, month)
     row = get_target_row(html, TARGET_PRE_PLACE)
-
     if row is None:
         st.write(f"DEBUG: {TARGET_PRE_PLACE} の行が見つかりません")
         return None
-
     infos = get_start_info(row)
-
-    # 当月
     for r in infos:
         st.write(f"DEBUG: 判定中... 開催前日={r['prev']} vs 本日={today}")
         if r["prev"] == today:
             st.write("DEBUG: => 一致しました")
             return r["encp"]
-
-    # 月跨ぎ
-    next_month = month + 1
-    next_year = year
-
-    if next_month == 13:
-        next_month = 1
-        next_year += 1
-
-    html_next = get_html(next_year, next_month)
-    row_next = get_target_row(html_next, TARGET_PRE_PLACE)
-    
-    if row_next:
-        infos_next = get_start_info(row_next)
-        last_day = calendar.monthrange(year, month)[1]
-
-        for r in infos_next:
-            if r["start"] == 1 and today == last_day:
-                st.write("DEBUG: => 月跨ぎでの前日一致を検知")
-                return r["encp"]
-
     return None
 
 # =========================
@@ -142,8 +110,19 @@ def extract_okayama_players(html):
     soup = BeautifulSoup(html, "html.parser")
     players = []
     
+    # 【追加ログ】HTML全体の文字数と、中身の抜粋を確認
+    st.write(f"DEBUG: 取得したHTMLの全文字数: {len(html)}")
+    
+    # ページ内に本当にテーブルがあるか確認
+    tables = soup.find_all("table")
+    st.write(f"DEBUG: ページ内のテーブル数: {len(tables)}")
+
     rows = soup.find_all("tr")
     st.write(f"DEBUG: 出走表から {len(rows)} 行を検出")
+
+    # なぜ1行しかないのか、その1行の中身を書き出す
+    if len(rows) > 0:
+        st.write(f"DEBUG: 検出された唯一の行の内容: {rows[0].text.strip()[:50]}...")
 
     for row in rows:
         tds = row.find_all("td")
@@ -190,7 +169,6 @@ def build_pre_comment(players, html):
 # =========================
 def get_data():
     try:
-        # 日本時間(JST)を取得（サーバーの時刻ズレ対策）
         now = datetime.now(timezone(timedelta(hours=9)))
         today = now.day
         month = now.month
@@ -245,7 +223,13 @@ def get_data():
 
         url = f"https://keirin.jp/pc/racelist?encp={encp}&dkbn=1"
         st.write(f"DEBUG: 出走表URLアクセス: {url}")
-        html = requests.get(url, headers=HEADERS).text
+        
+        # Refererヘッダーを付けてみる
+        headers_with_ref = HEADERS.copy()
+        headers_with_ref["Referer"] = "https://keirin.jp/pc/raceschedule"
+        
+        res = requests.get(url, headers=headers_with_ref, timeout=10)
+        html = res.text
 
         players = extract_okayama_players(html)
 
