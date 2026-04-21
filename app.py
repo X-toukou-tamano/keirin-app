@@ -134,44 +134,35 @@ def get_prev_target_encp(year, month, today):
     return None
 
 # =========================
-# 岡山選手抽出
+# 岡山選手抽出（JSON解析版）
 # =========================
-def extract_okayama_players(html):
-    soup = BeautifulSoup(html, "html.parser")
-
+def extract_okayama_players(jsj_data):
     players = []
+    
+    # JSJ008(参加選手一覧)の構造を解析
+    # MemberSelectionList -> MemberSelection の中に選手データがある
+    member_list = jsj_data.get("MemberSelectionList", {}).get("MemberSelection", [])
+    
+    # ログ: 取得した選手総数
+    st.write(f"DEBUG: JSONから {len(member_list)} 名の選手データを読み込みました")
 
-    for row in soup.find_all("tr"):
-        tds = row.find_all("td")
-        if len(tds) < 3:
-            continue
-
-        text = tds[2].get_text()
-
-        if "岡山" in text:
-            name = tds[2].get_text(strip=True)
+    for m in member_list:
+        name = m.get("kanyusyaName", "")
+        pref = m.get("prefName", "")
+        
+        if "岡山" in pref:
+            st.write(f"DEBUG: ★岡山選手ヒット!: {name} ({pref})")
             players.append(name)
 
     return players
 
-def extract_event_info(html):
-    soup = BeautifulSoup(html, "html.parser")
-
-    title = ""
-    title_tag = soup.find("div", class_="raceTitle")
-    if title_tag:
-        title = title_tag.get_text(strip=True)
-
-    grade = ""
-    grade_img = soup.find("img", class_="gradeIconSize")
-    if grade_img:
-        grade = grade_img.get("alt", "")
-
+def extract_event_info_from_json(jsj_data):
+    # JSONから大会名とグレードを取得
+    title = jsj_data.get("raceName", "無題")
+    grade = jsj_data.get("imgGradeAlt", "")
     return title, grade
 
-def build_pre_comment(players, html):
-
-    title, grade = extract_event_info(html)
+def build_pre_comment(players, title, grade):
     place_name = build_place_name(title, TARGET_PRE_PLACE)
 
     outputs = []
@@ -192,7 +183,7 @@ def build_pre_comment(players, html):
 # =========================
 def get_data():
     try:
-        # 【追加】日本時間(JST)を強制的に取得
+        # 日本時間(JST)を強制的に取得
         now = datetime.now(timezone(timedelta(hours=9)))
         today = now.day
         month = now.month
@@ -250,15 +241,21 @@ def get_data():
         if not encp:
             return "開催なし / 前日でもない"
 
-        url = f"https://keirin.jp/pc/racelist?encp={encp}&dkbn=1"
-        html = requests.get(url, headers=HEADERS).text
+        # 【修正】HTMLではなく、直接JSJ008（参加選手一覧）のJSONを取得する
+        json_url = f"https://keirin.jp/pc/json?encp={encp}&type=JSJ008"
+        st.write(f"DEBUG: アクセス中のJSON URL: {json_url}")
+        
+        jsj_res = requests.get(json_url, headers=HEADERS).json()
 
-        players = extract_okayama_players(html)
+        # 岡山選手抽出（JSON版）
+        players = extract_okayama_players(jsj_res)
 
         if not players:
             return "岡山選手なし"
 
-        outputs = build_pre_comment(players, html)
+        # JSONから大会情報を取得
+        title, grade = extract_event_info_from_json(jsj_res)
+        outputs = build_pre_comment(players, title, grade)
 
         return "\n\n----------------------\n\n".join(outputs)
 
