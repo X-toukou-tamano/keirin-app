@@ -3,6 +3,9 @@ from streamlit_autorefresh import st_autorefresh
 import requests
 import re
 import json
+from bs4 import BeautifulSoup
+from datetime import datetime
+import calendar
 
 # =========================
 # 自動更新（3分）
@@ -12,6 +15,8 @@ st_autorefresh(interval=180000, key="refresh")
 st.title("競輪結果（玉野）")
 
 TARGET_PLACE = "武雄"
+TARGET_PRE_PLACE = "玉野"
+
 HASHTAGS = "#玉野けいりん #チャリロトバンク玉野 #競輪"
 
 HEADERS = {
@@ -33,8 +38,12 @@ def convert_day_type_from_icon(val):
 def convert_grade(grade):
     return grade.replace("1","Ⅰ").replace("2","Ⅱ").replace("3","Ⅲ").replace("4","Ⅳ")
 
-def build_place_name(place):
-    return f"{place}市営{place}競輪"
+def build_place_name(title, place):
+    if f"in{place}" in title:
+        base = title.split(f"in{place}")[0]
+        return f"{base}市営{place}競輪"
+    else:
+        return f"{place}市営{place}競輪"
 
 def get_day_label(kaisai_list):
     days = []
@@ -44,21 +53,137 @@ def get_day_label(kaisai_list):
             days.append(txt.replace("(", "").replace(")", ""))
     return days[-1] if days else ""
 
-# ===== 日別条件 =====
-def is_day2_target(name):
-    return ("準決" in name) or ("二予" in name) or ("ガ予２" in name)
+# =========================
+# 前日ロジック
+# =========================
+def get_html(year, month):
+    url = f"https://keirin.jp/pc/raceschedule?scyy={year}&scym={str(month).zfill(2)}"
+    return requests.get(url, headers=HEADERS).text
 
-def is_day3_target(name):
-    return ("準決" in name) or ("決勝" in name)
+def get_target_row(html, place):
+    soup = BeautifulSoup(html, "html.parser")
+    for row in soup.find_all("tr"):
+        if place in row.text:
+            return row
+    return None
 
-def is_day4_target(name):
-    return "決勝" in name
+def get_start_info(row):
+    tds = row.find_all("td", class_="td_day")
+
+    day = 1
+    result = []
+
+    for td in tds:
+        if "bk_kaisai" in td.get("class", []):
+            a = td.find("a")
+            encp = a.get("data-pprm-encp")
+
+            result.append({
+                "start": day,
+                "prev": day - 1,
+                "encp": encp
+            })
+
+        day += int(td.get("colspan", 1))
+
+    return result
+
+def get_prev_target_encp(year, month, today):
+
+    html = get_html(year, month)
+    row = get_target_row(html, TARGET_PRE_PLACE)
+
+    infos = get_start_info(row)
+
+    # 当月
+    for r in infos:
+        if r["prev"] == today:
+            return r["encp"]
+
+    # 月跨ぎ
+    next_month = month + 1
+    next_year = year
+
+    if next_month == 13:
+        next_month = 1
+        next_year += 1
+
+    html_next = get_html(next_year, next_month)
+    row_next = get_target_row(html_next, TARGET_PRE_PLACE)
+    infos_next = get_start_info(row_next)
+
+    last_day = calendar.monthrange(year, month)[1]
+
+    for r in infos_next:
+        if r["start"] == 1 and today == last_day:
+            return r["encp"]
+
+    return None
 
 # =========================
-# データ取得
+# 岡山選手抽出
+# =========================
+def extract_okayama_players(html):
+    soup = BeautifulSoup(html, "html.parser")
+
+    players = []
+
+    for row in soup.find_all("tr"):
+        tds = row.find_all("td")
+        if len(tds) < 3:
+            continue
+
+        text = tds[2].get_text()
+
+        if "岡山" in text:
+            name = tds[2].get_text(strip=True)
+            players.append(name)
+
+    return players
+
+def extract_event_info(html):
+    soup = BeautifulSoup(html, "html.parser")
+
+    title = ""
+    title_tag = soup.find("div", class_="raceTitle")
+    if title_tag:
+        title = title_tag.get_text(strip=True)
+
+    grade = ""
+    grade_img = soup.find("img", class_="gradeIconSize")
+    if grade_img:
+        grade = grade_img.get("alt", "")
+
+    return title, grade
+
+def build_pre_comment(players, html):
+
+    title, grade = extract_event_info(html)
+    place_name = build_place_name(title, TARGET_PRE_PLACE)
+
+    outputs = []
+
+    for p in players:
+        text = f"""{place_name}
+「{title}」({grade})
+地元選手より、意気込みをいただきました！
+{p}選手  「」
+{HASHTAGS}
+"""
+        outputs.append(text)
+
+    return outputs
+
+# =========================
+# メイン
 # =========================
 def get_data():
     try:
+        today = datetime.now().day
+        month = datetime.now().month
+        year = datetime.now().year
+
+        # ===== TOP =====
         html = requests.get(
             "https://keirin.jp/pc/top",
             headers=HEADERS,
@@ -77,136 +202,46 @@ def get_data():
                 temp_enc = r.get("touhyouLivePara")
                 break
 
-        if not temp_enc:
-            return f"{TARGET_PLACE}開催なし"
+        # =========================
+        # ★ 開催中
+        # =========================
+        if temp_enc:
 
-        jsj001 = requests.get(
-            f"https://keirin.jp/pc/json?encp={temp_enc}&type=JSJ001",
-            headers=HEADERS,
-            timeout=10
-        ).json()
-
-        data = jsj001.get("C0201data")
-        if not data:
-            return "JSJ001取得失敗"
-
-        enc = data.get("encSelParaR")
-
-        enc_map = {
-            f"{i+1}R": r.get("encParaR")
-            for i, r in enumerate(data.get("C0201race", []))
-        }
-
-        title = data.get("raceName", "")
-        grade = convert_grade(data.get("imgGradeAlt", ""))
-        day_type = convert_day_type_from_icon(data.get("imgFuka1Alt", ""))
-        day_label = get_day_label(data.get("C0201kaisai", []))
-        place_name = build_place_name(TARGET_PLACE)
-
-        # ★ここが強いポイント
-        day_num = len(data.get("C0201kaisai", []))
-
-        result_json = requests.get(
-            f"https://keirin.jp/pc/json?encp={enc}&disp=PJ0306&type=JSJ018",
-            headers=HEADERS,
-            timeout=10
-        ).json()
-
-        result_list = result_json.get("resultList")
-        if not result_list:
-            return "結果取得失敗"
-
-        outputs = []
-
-        for race in result_list:
-
-            if not race.get("tyakui1List"):
-                continue
-
-            race_no = race.get("rclblRaceNo")
-            race_name = race.get("rclblSyumokuName", "")
-
-            result_raw = []
-            for block, pos in [
-                ("tyakui1List", 1),
-                ("tyakui2List", 2),
-                ("tyakui3List", 3)
-            ]:
-                for p in race.get(block, []):
-                    result_raw.append((pos, p.get("rclblSensyuName", "")))
-
-            enc_r = enc_map.get(race_no)
-            if not enc_r:
-                continue
-
-            player_json = requests.get(
-                f"https://keirin.jp/pc/json?encp={enc_r}&type=JSJ006",
+            jsj001 = requests.get(
+                f"https://keirin.jp/pc/json?encp={temp_enc}&type=JSJ001",
                 headers=HEADERS,
                 timeout=10
             ).json()
 
-            player_dict = {}
-            for p in player_json.get("sensyuTypeInfo", []):
-                key = normalize_name(p.get("sensyuName", ""))
-                player_dict[key] = {
-                    "pref": p.get("huKen", "").replace("　", ""),
-                    "term": p.get("sotugyouki", "")
-                }
+            data = jsj001.get("C0201data")
+            if not data:
+                return "JSJ001取得失敗"
 
-            lines = []
-            for pos, raw_name in result_raw:
-                key = normalize_name(raw_name)
-                info = player_dict.get(key, {"pref": "不明", "term": "不明"})
-                lines.append(
-                    f"{pos}着　{format_name(raw_name)}（{info['pref']}）{info['term']}期"
-                )
+            title = data.get("raceName", "")
+            grade = convert_grade(data.get("imgGradeAlt", ""))
+            day_type = convert_day_type_from_icon(data.get("imgFuka1Alt", ""))
+            day_label = get_day_label(data.get("C0201kaisai", []))
+            place_name = build_place_name(title, TARGET_PLACE)
 
-            winner = format_name(result_raw[0][1])
+            return f"{place_name}\n開催中"
 
-            # ===== 結果 =====
-            text_result = f"""{place_name}
-「{title}」({grade}{day_type})
-{day_label}　第{race_no}
+        # =========================
+        # ★ 前日処理
+        # =========================
+        encp = get_prev_target_encp(year, month, today)
 
-{chr(10).join(lines)}
+        if not encp:
+            return "開催なし / 前日でもない"
 
-{winner} おめでとうございます！
-{HASHTAGS}
-"""
-            outputs.append(text_result)
+        url = f"https://keirin.jp/pc/racelist?encp={encp}&dkbn=1"
+        html = requests.get(url, headers=HEADERS).text
 
-            # ===== 強い日別コメント判定 =====
-            comment_flag = False
+        players = extract_okayama_players(html)
 
-            if day_num == 1:
-                comment_flag = True
-            elif day_num == 2 and is_day2_target(race_name):
-                comment_flag = True
-            elif day_num == 3 and is_day3_target(race_name):
-                comment_flag = True
-            elif day_num >= 4 and is_day4_target(race_name):
-                comment_flag = True
+        if not players:
+            return "岡山選手なし"
 
-            if comment_flag:
-                winner_name = result_raw[0][1]
-                key = normalize_name(winner_name)
-                info = player_dict.get(key, {"pref": "不明", "term": "不明"})
-
-                text_intro = f"""{place_name}
-「{title}」({grade}{day_type})
-
-勝利選手の写真とレース後のコメントです！
-
-{day_label}　第{race_no}
-{winner_name}（{info['pref']}）{info['term']}期
-「」
-
-{HASHTAGS}
-"""
-                outputs.append(text_intro)
-
-        if not outputs:
-            return "結果待ち"
+        outputs = build_pre_comment(players, html)
 
         return "\n\n----------------------\n\n".join(outputs)
 
