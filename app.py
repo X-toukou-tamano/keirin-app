@@ -63,7 +63,7 @@ def activate_session(session, encp):
 
         st.write(f"DEBUG: JSJ008 status={res3.status_code}")
         st.write(f"DEBUG: JSJ008 length={len(res3.text)}")
-
+        st.code(res3.text)
     except Exception as e:
         st.write(f"DEBUG: セッション有効化エラー {e}")
 
