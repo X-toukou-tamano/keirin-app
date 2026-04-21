@@ -139,16 +139,23 @@ def get_prev_target_encp(year, month, today):
 def extract_okayama_players(jsj_data):
     players = []
     
-    # JSJ008(参加選手一覧)の構造を解析
-    # MemberSelectionList -> MemberSelection の中に選手データがある
-    member_list = jsj_data.get("MemberSelectionList", {}).get("MemberSelection", [])
+    # ログ: JSONのトップレベルにあるキーを表示
+    st.write(f"DEBUG: JSONのトップレベルキー: {list(jsj_data.keys())}")
     
-    # ログ: 取得した選手総数
-    st.write(f"DEBUG: JSONから {len(member_list)} 名の選手データを読み込みました")
+    # JSJ008(参加選手一覧)の構造を解析
+    member_list_obj = jsj_data.get("MemberSelectionList", {})
+    member_list = member_list_obj.get("MemberSelection", [])
+    
+    # ログ: 取得したリストの長さ
+    st.write(f"DEBUG: MemberSelectionListの中身の数: {len(member_list)}")
 
     for m in member_list:
         name = m.get("kanyusyaName", "")
         pref = m.get("prefName", "")
+        
+        # ログ: 全選手を出すと長いので、最初の5人だけ内容を出す
+        # if member_list.index(m) < 5:
+        #     st.write(f"DEBUG: 選手確認: {name} ({pref})")
         
         if "岡山" in pref:
             st.write(f"DEBUG: ★岡山選手ヒット!: {name} ({pref})")
@@ -241,11 +248,20 @@ def get_data():
         if not encp:
             return "開催なし / 前日でもない"
 
-        # 【修正】HTMLではなく、直接JSJ008（参加選手一覧）のJSONを取得する
+        # JSJ008を取得
         json_url = f"https://keirin.jp/pc/json?encp={encp}&type=JSJ008"
         st.write(f"DEBUG: アクセス中のJSON URL: {json_url}")
         
-        jsj_res = requests.get(json_url, headers=HEADERS).json()
+        response = requests.get(json_url, headers=HEADERS)
+        
+        # ログ: HTTPステータスコードと生レスポンスの冒頭を表示
+        st.write(f"DEBUG: HTTP Status: {response.status_code}")
+        st.write(f"DEBUG: Raw Response (先頭100文字): {response.text[:100]}")
+        
+        jsj_res = response.json()
+
+        # ログ: サーバーから返ってきた resultCd の確認
+        st.write(f"DEBUG: JSON resultCd: {jsj_res.get('resultCd')}")
 
         # 岡山選手抽出（JSON版）
         players = extract_okayama_players(jsj_res)
