@@ -36,13 +36,20 @@ def convert_grade(grade):
 def build_place_name(place):
     return f"{place}市営{place}競輪"
 
+# ★ここ修正（flgSelect使わない）
 def get_day_label(kaisai_list):
+    days = []
     for k in kaisai_list:
-        if k.get("flgSelect"):
-            return k.get("txtDaily", "").replace("(", "").replace(")", "")
-    return ""
+        txt = k.get("txtDaily", "")
+        if txt:
+            days.append(txt.replace("(", "").replace(")", ""))
 
-# ===== 日別条件（そのまま活用）=====
+    if not days:
+        return ""
+
+    return days[-1]  # ←最後＝最新日
+
+# ===== 日別条件 =====
 def is_day2_target(name):
     return ("準決" in name) or ("二予" in name) or ("ガ予２" in name)
 
@@ -170,7 +177,7 @@ def get_data():
 """
             outputs.append(text_result)
 
-            # ===== 日別条件でコメント出力 =====
+            # ===== コメント条件 =====
             comment_flag = False
 
             if "初日" in day_label:
@@ -179,7 +186,7 @@ def get_data():
                 comment_flag = True
             elif "3日目" in day_label and is_day3_target(race_name):
                 comment_flag = True
-            elif "最終日" in day_label and is_day4_target(race_name):
+            elif ("最終日" in day_label or "4日目" in day_label) and is_day4_target(race_name):
                 comment_flag = True
 
             if comment_flag:
