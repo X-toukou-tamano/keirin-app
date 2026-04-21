@@ -43,32 +43,7 @@ def is_day4_target(name):
     return "決勝" in name
 
 # =========================
-# 🔥 LIVE×2 → JSJ008有効化
-# =========================
-def activate_session(session, encp):
-    try:
-        st.write("DEBUG: LIVE① 実行")
-        url1 = f"https://keirin.jp/pc/json?encp={encp}&type=JSJ001"
-        res1 = session.get(url1, headers=HEADERS)
-        st.write(f"DEBUG: LIVE① status={res1.status_code}")
-
-        st.write("DEBUG: LIVE② 実行")
-        url2 = f"https://keirin.jp/pc/json?encp={encp}&type=JSJ001"
-        res2 = session.get(url2, headers=HEADERS)
-        st.write(f"DEBUG: LIVE② status={res2.status_code}")
-
-        st.write("DEBUG: JSJ008確認")
-        url3 = f"https://keirin.jp/pc/json?encp={encp}&type=JSJ008"
-        res3 = session.get(url3, headers=HEADERS)
-
-        st.write(f"DEBUG: JSJ008 status={res3.status_code}")
-        st.write(f"DEBUG: JSJ008 length={len(res3.text)}")
-        st.code(res3.text)
-    except Exception as e:
-        st.write(f"DEBUG: セッション有効化エラー {e}")
-
-# =========================
-# 前日判定
+# 前日判定（encp取得）
 # =========================
 def get_prev_encp(session):
     now = datetime.now(timezone(timedelta(hours=9)))
@@ -122,35 +97,32 @@ def get_live_info(session):
     return None, None
 
 # =========================
-# 前日処理
+# 前日処理（JSONから抽出）
 # =========================
 def run_prev_mode(session, encp):
-    activate_session(session, encp)
 
-    url = f"https://keirin.jp/pc/racelist?encp={encp}&dkbn=1"
+    url = f"https://keirin.jp/pc/racelist?encp={encp}"
     html = session.get(url, headers=HEADERS).text
-    st.write(f"DEBUG: racelist length={len(html)}")
 
-    soup = BeautifulSoup(html, "html.parser")
+    # JSON抽出
+    match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{.*?\});", html, re.DOTALL)
+    if not match:
+        return "データ取得失敗"
 
-    title_tag = soup.find("div", class_="raceTitle")
-    title = title_tag.get_text(strip=True) if title_tag else "（タイトル取得失敗）"
+    data = json.loads(match.group(1))
 
     outputs = []
 
-    for row in soup.find_all("tr"):
-        tds = row.find_all("td")
-        if len(tds) < 3:
-            continue
-        if "岡山" in tds[2].get_text():
-            name = tds[2].get_text(strip=True)
-            text = f"""{TARGET_PLACE}競輪
-「{title}」
+    for gaitei in data["J0302data"]["J0302gaitei"]:
+        for p in gaitei["J0302sensyu"]:
+            if p["hukenName"].strip() == "岡　山":
+                name = p["playerNm"]
+                text = f"""{TARGET_PLACE}競輪
 地元選手より、意気込みをいただきました！
 {name}選手 「」
 {HASHTAGS}
 """
-            outputs.append(text)
+                outputs.append(text)
 
     return "\n\n----------------------\n\n".join(outputs) if outputs else "岡山選手なし"
 
@@ -158,8 +130,6 @@ def run_prev_mode(session, encp):
 # 開催中処理
 # =========================
 def run_live_mode(session, encp, day_label):
-
-    activate_session(session, encp)
 
     jsj001 = session.get(
         f"https://keirin.jp/pc/json?encp={encp}&type=JSJ001",
