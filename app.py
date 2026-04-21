@@ -11,7 +11,7 @@ st_autorefresh(interval=180000, key="refresh")
 
 st.title("競輪結果（玉野）")
 
-TARGET_PLACE = "玉野"
+TARGET_PLACE = "武雄"
 HASHTAGS = "#玉野けいりん #チャリロトバンク玉野 #競輪"
 
 HEADERS = {
@@ -47,7 +47,6 @@ def get_day_label(kaisai_list):
 # =========================
 def get_data():
     try:
-        # TOP取得
         html = requests.get(
             "https://keirin.jp/pc/top",
             headers=HEADERS,
@@ -148,6 +147,7 @@ def get_data():
 
             winner = format_name(result_raw[0][1])
 
+            # ===== 結果 =====
             text_result = f"""{place_name}
 「{title}」({grade}{day_type})
 {day_label}　第{race_no}
@@ -157,8 +157,26 @@ def get_data():
 {winner} おめでとうございます！
 {HASHTAGS}
 """
-
             outputs.append(text_result)
+
+            # ===== 初日紹介（追加） =====
+            if "初日" in day_label:
+                winner_name = result_raw[0][1]
+                key = normalize_name(winner_name)
+                info = player_dict.get(key, {"pref": "不明", "term": "不明"})
+
+                text_intro = f"""{place_name}
+「{title}」({grade}{day_type})
+
+勝利選手の写真とレース後のコメントです！
+
+{day_label}　第{race_no}
+{winner_name}（{info['pref']}）{info['term']}期
+「」
+
+{HASHTAGS}
+"""
+                outputs.append(text_intro)
 
         if not outputs:
             return "結果待ち"
