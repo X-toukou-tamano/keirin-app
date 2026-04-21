@@ -102,7 +102,7 @@ def get_live_info(session):
 # =========================
 def run_prev_mode(session, encp):
 
-    url = f"https://keirin.jp/pc/racelist?encp={encp}"
+    url = f"https://keirin.jp/pc/raceentry?encp={encp}"
     html = session.get(url, headers=HEADERS).text
 
     st.write(f"DEBUG: HTML長さ={len(html)}")
