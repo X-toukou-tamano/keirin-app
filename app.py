@@ -61,133 +61,105 @@ def is_day4_target(name):
     return "決勝" in name
 
 # =========================
-# 前日ロジック
+# 前日判定
 # =========================
-def get_html(session, year, month):
-    url = f"https://keirin.jp/pc/raceschedule?scyy={year}&scym={str(month).zfill(2)}"
-    return session.get(url, headers=HEADERS).text
-
-def get_target_row(html):
-    soup = BeautifulSoup(html, "html.parser")
-    for row in soup.find_all("tr"):
-        if TARGET_PLACE in row.text:
-            return row
-    return None
-
-def get_start_info(row):
-    tds = row.find_all("td", class_="td_day")
-    day = 1
-    result = []
-    for td in tds:
-        classes = td.get("class", [])
-        colspan = int(td.get("colspan", 1))
-        if "bk_kaisai" in classes:
-            a = td.find("a")
-            if a:
-                encp = a.get("data-pprm-encp")
-                result.append({"start": day, "prev": day - 1, "encp": encp})
-        day += colspan
-    return result
-
 def get_prev_encp(session):
     now = datetime.now(timezone(timedelta(hours=9)))
     today, month, year = now.day, now.month, now.year
 
-    html = get_html(session, year, month)
-    row = get_target_row(html)
-    if not row:
-        return None
+    url = f"https://keirin.jp/pc/raceschedule?scyy={year}&scym={str(month).zfill(2)}"
+    html = session.get(url, headers=HEADERS).text
 
-    infos = get_start_info(row)
-    for r in infos:
-        if r["prev"] == today:
-            return r["encp"]
+    soup = BeautifulSoup(html, "html.parser")
+
+    for row in soup.find_all("tr"):
+        if TARGET_PLACE in row.text:
+            tds = row.find_all("td", class_="td_day")
+            day = 1
+            for td in tds:
+                colspan = int(td.get("colspan", 1))
+                if "bk_kaisai" in td.get("class", []):
+                    a = td.find("a")
+                    if a:
+                        encp = a.get("data-pprm-encp")
+                        if day - 1 == today:
+                            return encp
+                day += colspan
 
     return None
 
-def extract_okayama_players(html):
+# =========================
+# 開催中判定（＋日付取得）
+# =========================
+def get_live_info(session):
+    html = session.get("https://keirin.jp/pc/top", headers=HEADERS).text
+    match = re.search(r"var pc0101_json = (\{.*?\});", html, re.DOTALL)
+    if not match:
+        return None, None
+
+    top = json.loads(match.group(1))
+
+    for r in top["RaceList"]:
+        if r["keirinjoName"] == TARGET_PLACE:
+            encp = r["touhyouLivePara"]
+
+            jsj001 = session.get(
+                f"https://keirin.jp/pc/json?encp={encp}&type=JSJ001",
+                headers=HEADERS
+            ).json()
+
+            if "C0201data" not in jsj001:
+                return encp, None
+
+            day_label = get_day_label(jsj001["C0201data"]["C0201kaisai"])
+            return encp, day_label
+
+    return None, None
+
+# =========================
+# 前日処理
+# =========================
+def run_prev_mode(session, encp):
+    url = f"https://keirin.jp/pc/racelist?encp={encp}&dkbn=1"
+    html = session.get(url, headers=HEADERS).text
+
     soup = BeautifulSoup(html, "html.parser")
-    players = []
+
+    title = soup.find("div", class_="raceTitle").get_text(strip=True)
+
+    outputs = []
     for row in soup.find_all("tr"):
         tds = row.find_all("td")
         if len(tds) < 3:
             continue
         if "岡山" in tds[2].get_text():
-            players.append(tds[2].get_text(strip=True))
-    return players
-
-def extract_event_info(html):
-    soup = BeautifulSoup(html, "html.parser")
-    title, grade = "", ""
-    title_tag = soup.find("div", class_="raceTitle")
-    if title_tag:
-        title = title_tag.get_text(strip=True)
-    grade_img = soup.find("img", class_="gradeIconSize")
-    if grade_img:
-        grade = grade_img.get("alt", "")
-    return title, grade
-
-def run_prev_mode(session, encp):
-    url = f"https://keirin.jp/pc/racelist?encp={encp}&dkbn=1"
-    html = session.get(url, headers=HEADERS).text
-
-    players = extract_okayama_players(html)
-    if not players:
-        return "岡山選手なし"
-
-    title, grade = extract_event_info(html)
-
-    outputs = []
-    for p in players:
-        text = f"""{TARGET_PLACE}競輪
-「{title}」({grade})
+            name = tds[2].get_text(strip=True)
+            text = f"""{TARGET_PLACE}競輪
+「{title}」
 地元選手より、意気込みをいただきました！
-{p}選手 「」
+{name}選手 「」
 {HASHTAGS}
 """
-        outputs.append(text)
+            outputs.append(text)
 
-    return "\n\n----------------------\n\n".join(outputs)
+    return "\n\n----------------------\n\n".join(outputs) if outputs else "岡山選手なし"
 
 # =========================
-# 開催中ロジック
+# 開催中処理（フィルタ込み）
 # =========================
-def get_top_json(session):
-    html = session.get("https://keirin.jp/pc/top", headers=HEADERS).text
-    match = re.search(r"var pc0101_json = (\{.*?\});", html, re.DOTALL)
-    if not match:
-        return None
-    return json.loads(match.group(1))
+def run_live_mode(session, encp, day_label):
 
-def get_live_encp(session):
-    top = get_top_json(session)
-    if not top:
-        return None
-
-    for r in top["RaceList"]:
-        if r["keirinjoName"] == TARGET_PLACE:
-            return r["touhyouLivePara"]
-
-    return None
-
-def run_live_mode(session, temp_enc):
     jsj001 = session.get(
-        f"https://keirin.jp/pc/json?encp={temp_enc}&type=JSJ001",
+        f"https://keirin.jp/pc/json?encp={encp}&type=JSJ001",
         headers=HEADERS
-    ).json()
+    ).json()["C0201data"]
 
-    if "C0201data" not in jsj001:
-        return "開催情報取得失敗"
+    enc = jsj001["encSelParaR"]
+    enc_map = {f"{i+1}R": r["encParaR"] for i, r in enumerate(jsj001["C0201race"])}
 
-    data = jsj001["C0201data"]
-
-    enc = data["encSelParaR"]
-    enc_map = {f"{i+1}R": r["encParaR"] for i, r in enumerate(data["C0201race"])}
-
-    title = data["raceName"]
-    grade = convert_grade(data["imgGradeAlt"])
-    day_type = convert_day_type_from_icon(data["imgFuka1Alt"])
-    day_label = get_day_label(data["C0201kaisai"])
+    title = jsj001["raceName"]
+    grade = convert_grade(jsj001["imgGradeAlt"])
+    day_type = convert_day_type_from_icon(jsj001["imgFuka1Alt"])
     place_name = build_place_name(TARGET_PLACE)
 
     result_json = session.get(
@@ -195,63 +167,29 @@ def run_live_mode(session, temp_enc):
         headers=HEADERS
     ).json()
 
-    if "resultList" not in result_json:
-        return "結果取得失敗"
-
     outputs = []
 
-    for race in result_json["resultList"]:
-
+    for race in result_json.get("resultList", []):
         if not race["tyakui1List"]:
             continue
 
         race_no = race["rclblRaceNo"]
         race_name = race["rclblSyumokuName"]
 
-        # ===== 日別フィルタ =====
-        if "初日" in day_label:
-            pass
-        elif "2日目" in day_label:
-            if not is_day2_target(race_name):
-                continue
-        elif "3日目" in day_label:
-            if not is_day3_target(race_name):
-                continue
-        elif "最終日" in day_label:
-            if not is_day4_target(race_name):
-                continue
+        # 日別フィルタ
+        if "2日目" in day_label and not is_day2_target(race_name):
+            continue
+        if "3日目" in day_label and not is_day3_target(race_name):
+            continue
+        if "最終日" in day_label and not is_day4_target(race_name):
+            continue
 
         result_raw = []
-        for block, pos in [
-            ("tyakui1List", 1),
-            ("tyakui2List", 2),
-            ("tyakui3List", 3)
-        ]:
+        for block, pos in [("tyakui1List",1),("tyakui2List",2),("tyakui3List",3)]:
             for p in race.get(block, []):
                 result_raw.append((pos, p["rclblSensyuName"]))
 
-        enc_r = enc_map.get(race_no)
-
-        player_json = session.get(
-            f"https://keirin.jp/pc/json?encp={enc_r}&type=JSJ006",
-            headers=HEADERS
-        ).json()
-
-        player_dict = {}
-        for p in player_json.get("sensyuTypeInfo", []):
-            key = normalize_name(p["sensyuName"])
-            player_dict[key] = {
-                "pref": p["huKen"].replace("　", ""),
-                "term": p["sotugyouki"]
-            }
-
-        lines = []
-        for pos, raw_name in result_raw:
-            key = normalize_name(raw_name)
-            info = player_dict.get(key, {"pref": "不明", "term": "不明"})
-            lines.append(
-                f"{pos}着　{format_name(raw_name)} （{info['pref']}）{info['term']}期"
-            )
+        lines = [f"{pos}着　{format_name(name)}" for pos, name in result_raw]
 
         winner = format_name(result_raw[0][1])
 
@@ -266,59 +204,30 @@ def run_live_mode(session, temp_enc):
 """
         outputs.append(text)
 
-        # ===== 初日だけ追加投稿 =====
-        if "初日" in day_label:
-            winner_name = result_raw[0][1]
-            key = normalize_name(winner_name)
-            info = player_dict.get(key, {"pref": "不明", "term": "不明"})
-
-            intro = f"""{place_name}
-「{title}」({grade}{day_type})
-
-勝利選手の写真とレース後のコメントです！
-
-{day_label}　第{race_no}
-{winner_name}（{info['pref']}）{info['term']}期
-「」
-
-{HASHTAGS}
-"""
-            outputs.append(intro)
-
-    return "\n\n----------------------\n\n".join(outputs)
+    return "\n\n----------------------\n\n".join(outputs) if outputs else "対象レースなし"
 
 # =========================
 # メイン
 # =========================
 def main():
-    try:
-        session = requests.Session()
+    session = requests.Session()
 
-        # 認証
-        top_res = session.get("https://keirin.jp/pc/top", headers=HEADERS)
-        match = re.search(r"var pc0101_json = (\{.*?\});", top_res.text, re.DOTALL)
-        if match:
-            top = json.loads(match.group(1))
-            live_list = top.get("RaceList", [])
-            if live_list:
-                auth_encp = live_list[0].get("touhyouLivePara")
-                auth_url = f"https://keirin.jp/pc/json?encp={auth_encp}&type=JSJ048&kanyusyaflg=1&kaisaikbikbn=1"
-                session.get(auth_url, headers=HEADERS)
+    # 状態判定
+    live_encp, day_label = get_live_info(session)
+    prev_encp = get_prev_encp(session)
 
-        # 開催中優先
-        live_encp = get_live_encp(session)
-        if live_encp:
-            return run_live_mode(session, live_encp)
+    # ===== 状態表示 =====
+    if live_encp:
+        st.info(f"🟢 開催中：{day_label}")
+        return run_live_mode(session, live_encp, day_label)
 
-        # 前日
-        prev_encp = get_prev_encp(session)
-        if prev_encp:
-            return run_prev_mode(session, prev_encp)
+    elif prev_encp:
+        st.info("🟡 前日（開催前日）")
+        return run_prev_mode(session, prev_encp)
 
+    else:
+        st.info("⚪ 非開催日")
         return "開催なし"
-
-    except Exception as e:
-        return f"エラー: {e}"
 
 # =========================
 # 表示
