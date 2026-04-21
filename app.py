@@ -76,7 +76,7 @@ def get_data():
                 break
 
         if not temp_enc:
-            return "玉野開催なし"
+            return f"{TARGET_PLACE}開催なし"
 
         jsj001 = requests.get(
             f"https://keirin.jp/pc/json?encp={temp_enc}&type=JSJ001",
