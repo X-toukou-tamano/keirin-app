@@ -14,7 +14,7 @@ st_autorefresh(interval=180000, key="refresh")
 
 st.title("競輪結果（玉野）")
 
-TARGET_PLACE = "武雄"
+TARGET_PLACE = "玉野"
 TARGET_PRE_PLACE = "玉野"
 
 HASHTAGS = "#玉野けいりん #チャリロトバンク玉野 #競輪"
