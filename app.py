@@ -13,6 +13,10 @@ st_autorefresh(interval=180000, key="refresh")
 
 st.title("玉野競輪 投稿生成アプリ")
 
+# 今日の日付表示
+now = datetime.now(timezone(timedelta(hours=9)))
+st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+
 TARGET_PLACE = "玉野"
 HASHTAGS = "#玉野けいりん #チャリロトバンク玉野 #競輪"
 
@@ -45,6 +49,16 @@ def get_day_label(kaisai_list):
         if k["flgSelect"]:
             return k["txtDaily"].replace("(", "").replace(")", "")
     return ""
+
+# ===== 日別フィルタ =====
+def is_day2_target(name):
+    return ("準決" in name) or ("二予" in name) or ("ガ予２" in name)
+
+def is_day3_target(name):
+    return ("準決" in name) or ("決勝" in name)
+
+def is_day4_target(name):
+    return "決勝" in name
 
 # =========================
 # 前日ロジック
@@ -187,10 +201,25 @@ def run_live_mode(session, temp_enc):
     outputs = []
 
     for race in result_json["resultList"]:
+
         if not race["tyakui1List"]:
             continue
 
         race_no = race["rclblRaceNo"]
+        race_name = race["rclblSyumokuName"]
+
+        # ===== 日別フィルタ =====
+        if "初日" in day_label:
+            pass
+        elif "2日目" in day_label:
+            if not is_day2_target(race_name):
+                continue
+        elif "3日目" in day_label:
+            if not is_day3_target(race_name):
+                continue
+        elif "最終日" in day_label:
+            if not is_day4_target(race_name):
+                continue
 
         result_raw = []
         for block, pos in [
@@ -237,16 +266,35 @@ def run_live_mode(session, temp_enc):
 """
         outputs.append(text)
 
+        # ===== 初日だけ追加投稿 =====
+        if "初日" in day_label:
+            winner_name = result_raw[0][1]
+            key = normalize_name(winner_name)
+            info = player_dict.get(key, {"pref": "不明", "term": "不明"})
+
+            intro = f"""{place_name}
+「{title}」({grade}{day_type})
+
+勝利選手の写真とレース後のコメントです！
+
+{day_label}　第{race_no}
+{winner_name}（{info['pref']}）{info['term']}期
+「」
+
+{HASHTAGS}
+"""
+            outputs.append(intro)
+
     return "\n\n----------------------\n\n".join(outputs)
 
 # =========================
-# メイン制御
+# メイン
 # =========================
 def main():
     try:
         session = requests.Session()
 
-        # 認証（前日コード互換）
+        # 認証
         top_res = session.get("https://keirin.jp/pc/top", headers=HEADERS)
         match = re.search(r"var pc0101_json = (\{.*?\});", top_res.text, re.DOTALL)
         if match:
@@ -257,12 +305,12 @@ def main():
                 auth_url = f"https://keirin.jp/pc/json?encp={auth_encp}&type=JSJ048&kanyusyaflg=1&kaisaikbikbn=1"
                 session.get(auth_url, headers=HEADERS)
 
-        # ① 開催中優先
+        # 開催中優先
         live_encp = get_live_encp(session)
         if live_encp:
             return run_live_mode(session, live_encp)
 
-        # ② 前日
+        # 前日
         prev_encp = get_prev_encp(session)
         if prev_encp:
             return run_prev_mode(session, prev_encp)
