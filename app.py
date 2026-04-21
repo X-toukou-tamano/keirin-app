@@ -4,7 +4,7 @@ import requests
 import re
 import json
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 import calendar
 
 # =========================
@@ -73,45 +73,51 @@ def get_start_info(row):
     day = 1
     result = []
 
-    st.write(f"DEBUG: {TARGET_PRE_PLACE}の行から {len(tds)} 個のセルを読み込みました")
-
+    print(f"\n--- [LOG] get_start_info 開始 (場所: {TARGET_PRE_PLACE}) ---")
     for td in tds:
         classes = td.get("class", [])
+        colspan = int(td.get("colspan", 1))
+        inner_text = td.text.strip()
+        
+        # ログ: プログラム上のカウントと実際のセルの情報を出力
+        print(f"DEBUG: counter={day}日目 | class={classes} | colspan={colspan} | text='{inner_text}'")
+
         if "bk_kaisai" in classes:
             a = td.find("a")
-            encp = a.get("data-pprm-encp") if a else None
-            
-            st.write(f"DEBUG: 開催セル検知! プログラム上の日付カウント: {day}日目 (クラス: {classes})")
+            if a:
+                encp = a.get("data-pprm-encp")
+                print(f"  => 開催開始を検知! 開始日判定: {day}")
+                result.append({
+                    "start": day,
+                    "prev": day - 1,
+                    "encp": encp
+                })
 
-            result.append({
-                "start": day,
-                "prev": day - 1,
-                "encp": encp
-            })
-
-        day += int(td.get("colspan", 1))
+        day += colspan
+    print("--- [LOG] get_start_info 終了 ---\n")
 
     return result
 
 def get_prev_target_encp(year, month, today):
-
+    print(f"--- [LOG] get_prev_target_encp (本日: {today}日) ---")
     html = get_html(year, month)
     row = get_target_row(html, TARGET_PRE_PLACE)
 
     if row is None:
-        st.write(f"DEBUG: {TARGET_PRE_PLACE} の行が見つかりません")
+        print(f"ERROR: {TARGET_PRE_PLACE} の行が見つかりませんでした。")
         return None
 
     infos = get_start_info(row)
 
     # 当月
     for r in infos:
-        st.write(f"DEBUG: 比較中... 開催前日判定:{r['prev']} vs 今日の日付:{today}")
+        print(f"判定チェック: 開催前日={r['prev']} vs 本日={today}")
         if r["prev"] == today:
-            st.write("DEBUG: 一致しました！")
+            print("  => 一致! 前日処理を実行します。")
             return r["encp"]
 
     # 月跨ぎ
+    print("当月内に該当なし。月跨ぎを確認します。")
     next_month = month + 1
     next_year = year
 
@@ -128,48 +134,50 @@ def get_prev_target_encp(year, month, today):
 
         for r in infos_next:
             if r["start"] == 1 and today == last_day:
-                st.write("DEBUG: 月跨ぎで一致しました！")
+                print("  => 月跨ぎでの前日一致を検知!")
                 return r["encp"]
 
     return None
 
 # =========================
-# 岡山選手抽出（JSON解析版）
+# 岡山選手抽出
 # =========================
-def extract_okayama_players(jsj_data):
-    players = []
-    
-    # ログ: JSONのトップレベルにあるキーを表示
-    st.write(f"DEBUG: JSONのトップレベルキー: {list(jsj_data.keys())}")
-    
-    # JSJ008(参加選手一覧)の構造を解析
-    member_list_obj = jsj_data.get("MemberSelectionList", {})
-    member_list = member_list_obj.get("MemberSelection", [])
-    
-    # ログ: 取得したリストの長さ
-    st.write(f"DEBUG: MemberSelectionListの中身の数: {len(member_list)}")
+def extract_okayama_players(html):
+    soup = BeautifulSoup(html, "html.parser")
 
-    for m in member_list:
-        name = m.get("kanyusyaName", "")
-        pref = m.get("prefName", "")
-        
-        # ログ: 全選手を出すと長いので、最初の5人だけ内容を出す
-        # if member_list.index(m) < 5:
-        #     st.write(f"DEBUG: 選手確認: {name} ({pref})")
-        
-        if "岡山" in pref:
-            st.write(f"DEBUG: ★岡山選手ヒット!: {name} ({pref})")
+    players = []
+
+    for row in soup.find_all("tr"):
+        tds = row.find_all("td")
+        if len(tds) < 3:
+            continue
+
+        text = tds[2].get_text()
+
+        if "岡山" in text:
+            name = tds[2].get_text(strip=True)
             players.append(name)
 
     return players
 
-def extract_event_info_from_json(jsj_data):
-    # JSONから大会名とグレードを取得
-    title = jsj_data.get("raceName", "無題")
-    grade = jsj_data.get("imgGradeAlt", "")
+def extract_event_info(html):
+    soup = BeautifulSoup(html, "html.parser")
+
+    title = ""
+    title_tag = soup.find("div", class_="raceTitle")
+    if title_tag:
+        title = title_tag.get_text(strip=True)
+
+    grade = ""
+    grade_img = soup.find("img", class_="gradeIconSize")
+    if grade_img:
+        grade = grade_img.get("alt", "")
+
     return title, grade
 
-def build_pre_comment(players, title, grade):
+def build_pre_comment(players, html):
+
+    title, grade = extract_event_info(html)
     place_name = build_place_name(title, TARGET_PRE_PLACE)
 
     outputs = []
@@ -190,13 +198,13 @@ def build_pre_comment(players, title, grade):
 # =========================
 def get_data():
     try:
-        # 日本時間(JST)を強制的に取得
-        now = datetime.now(timezone(timedelta(hours=9)))
+        now = datetime.now()
         today = now.day
         month = now.month
         year = now.year
-
-        st.write(f"DEBUG: 判定に使用している今日の日付: {today}日")
+        
+        print(f"\n[SYSTEM LOG] 実行時刻: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"[SYSTEM LOG] 判定用日付: {year}年{month}月{today}日")
 
         # ===== TOP =====
         html = requests.get(
@@ -221,7 +229,7 @@ def get_data():
         # ★ 開催中
         # =========================
         if temp_enc:
-
+            print("LOG: 開催中データを検知しました。")
             jsj001 = requests.get(
                 f"https://keirin.jp/pc/json?encp={temp_enc}&type=JSJ001",
                 headers=HEADERS,
@@ -233,9 +241,6 @@ def get_data():
                 return "JSJ001取得失敗"
 
             title = data.get("raceName", "")
-            grade = convert_grade(data.get("imgGradeAlt", ""))
-            day_type = convert_day_type_from_icon(data.get("imgFuka1Alt", ""))
-            day_label = get_day_label(data.get("C0201kaisai", []))
             place_name = build_place_name(title, TARGET_PLACE)
 
             return f"{place_name}\n開催中"
@@ -243,35 +248,21 @@ def get_data():
         # =========================
         # ★ 前日処理
         # =========================
+        print("LOG: 開催中ではないため、前日判定へ移行します。")
         encp = get_prev_target_encp(year, month, today)
 
         if not encp:
             return "開催なし / 前日でもない"
 
-        # JSJ008を取得
-        json_url = f"https://keirin.jp/pc/json?encp={encp}&type=JSJ008"
-        st.write(f"DEBUG: アクセス中のJSON URL: {json_url}")
-        
-        response = requests.get(json_url, headers=HEADERS)
-        
-        # ログ: HTTPステータスコードと生レスポンスの冒頭を表示
-        st.write(f"DEBUG: HTTP Status: {response.status_code}")
-        st.write(f"DEBUG: Raw Response (先頭100文字): {response.text[:100]}")
-        
-        jsj_res = response.json()
+        url = f"https://keirin.jp/pc/racelist?encp={encp}&dkbn=1"
+        html = requests.get(url, headers=HEADERS).text
 
-        # ログ: サーバーから返ってきた resultCd の確認
-        st.write(f"DEBUG: JSON resultCd: {jsj_res.get('resultCd')}")
-
-        # 岡山選手抽出（JSON版）
-        players = extract_okayama_players(jsj_res)
+        players = extract_okayama_players(html)
 
         if not players:
             return "岡山選手なし"
 
-        # JSONから大会情報を取得
-        title, grade = extract_event_info_from_json(jsj_res)
-        outputs = build_pre_comment(players, title, grade)
+        outputs = build_pre_comment(players, html)
 
         return "\n\n----------------------\n\n".join(outputs)
 
