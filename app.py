@@ -43,7 +43,7 @@ def is_day4_target(name):
     return "決勝" in name
 
 # =========================
-# 前日判定（encp取得）
+# 前日判定
 # =========================
 def get_prev_encp(session):
     now = datetime.now(timezone(timedelta(hours=9)))
@@ -97,15 +97,16 @@ def get_live_info(session):
     return None, None
 
 # =========================
-# 前日処理（JSONから抽出）
+# 前日処理（修正版）
 # =========================
 def run_prev_mode(session, encp):
 
     url = f"https://keirin.jp/pc/racelist?encp={encp}"
     html = session.get(url, headers=HEADERS).text
 
-    # JSON抽出
-    match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{.*?\});", html, re.DOTALL)
+    # ★ 修正済み（確実に拾う）
+    match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{.*?\})\s*;", html, re.DOTALL)
+
     if not match:
         return "データ取得失敗"
 
@@ -115,7 +116,7 @@ def run_prev_mode(session, encp):
 
     for gaitei in data["J0302data"]["J0302gaitei"]:
         for p in gaitei["J0302sensyu"]:
-            if p["hukenName"].strip() == "岡　山":
+            if "岡　山" in p["hukenName"]:
                 name = p["playerNm"]
                 text = f"""{TARGET_PLACE}競輪
 地元選手より、意気込みをいただきました！
