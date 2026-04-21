@@ -42,6 +42,16 @@ def get_day_label(kaisai_list):
             return k.get("txtDaily", "").replace("(", "").replace(")", "")
     return ""
 
+# ===== 日別条件（そのまま活用）=====
+def is_day2_target(name):
+    return ("準決" in name) or ("二予" in name) or ("ガ予２" in name)
+
+def is_day3_target(name):
+    return ("準決" in name) or ("決勝" in name)
+
+def is_day4_target(name):
+    return "決勝" in name
+
 # =========================
 # データ取得
 # =========================
@@ -109,6 +119,7 @@ def get_data():
                 continue
 
             race_no = race.get("rclblRaceNo")
+            race_name = race.get("rclblSyumokuName", "")
 
             result_raw = []
             for block, pos in [
@@ -159,8 +170,19 @@ def get_data():
 """
             outputs.append(text_result)
 
-            # ===== 初日紹介（追加） =====
+            # ===== 日別条件でコメント出力 =====
+            comment_flag = False
+
             if "初日" in day_label:
+                comment_flag = True
+            elif "2日目" in day_label and is_day2_target(race_name):
+                comment_flag = True
+            elif "3日目" in day_label and is_day3_target(race_name):
+                comment_flag = True
+            elif "最終日" in day_label and is_day4_target(race_name):
+                comment_flag = True
+
+            if comment_flag:
                 winner_name = result_raw[0][1]
                 key = normalize_name(winner_name)
                 info = player_dict.get(key, {"pref": "不明", "term": "不明"})
