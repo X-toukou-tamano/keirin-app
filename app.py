@@ -15,7 +15,12 @@ today = now.day
 st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
 
 TARGET_PLACE = "玉野"
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Referer": "https://keirin.jp/pc/raceschedule",
+    "Content-Type": "application/x-www-form-urlencoded"
+}
 
 
 # =========================
@@ -49,6 +54,7 @@ def get_prev_encp(session):
                     encp = a.get("data-pprm-encp")
 
                     if day_cursor == today + 1:
+                        st.write(f"DEBUG: 前日encp={encp}")
                         return encp
 
             day_cursor += colspan
@@ -57,40 +63,50 @@ def get_prev_encp(session):
 
 
 # =========================
-# 本体（API直取り）
+# PJ0302取得（ここが本体）
 # =========================
 def fetch_players(session, encp):
 
-    st.write("DEBUG: PC0201取得開始")
+    st.write("====== POST racelist ======")
 
-    # ★これが本命API
-    res = session.get(
-        f"https://keirin.jp/pc/json?encp={encp}&type=PC0201",
-        headers=HEADERS
-    )
+    url = "https://keirin.jp/pc/racelist"
+
+    payload = {
+        "encp": encp,
+        "disp": "PJ0302"
+    }
+
+    res = session.post(url, data=payload, headers=HEADERS)
 
     st.write(f"DEBUG: status={res.status_code}")
     st.write(f"DEBUG: length={len(res.text)}")
-    st.code(res.text[:300])
 
-    try:
-        data = res.json()
-    except:
-        return "JSON取得失敗"
+    st.write("DEBUG: HTML先頭")
+    st.code(res.text[:400])
 
-    if "C0201data" not in data:
-        return "PC0201構造エラー"
+    # ---------------------
+    # PJ0302抽出
+    # ---------------------
+    match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", res.text)
 
-    players = []
+    if not match:
+        st.write("DEBUG: PJ0302取得失敗")
+        return "データ取得失敗"
 
-    # ★選手一覧
-    for p in data["C0201data"].get("C0201sensyu", []):
-        st.write(f"DEBUG: {p['namePlayerSei']}")
+    st.write("DEBUG: PJ0302取得成功")
 
-        # ※ここは県情報が無いので名前だけ
-        players.append(p["namePlayerSei"])
+    data = json.loads(match.group(1))
 
-    return "\n".join(players) if players else "選手取得失敗"
+    outputs = []
+
+    for g in data["J0302data"]["J0302gaitei"]:
+        for p in g["J0302sensyu"]:
+            st.write(f"DEBUG: {p['playerNm']} / {p['hukenName']}")
+
+            if "岡　山" in p["hukenName"]:
+                outputs.append(p["playerNm"])
+
+    return "\n".join(outputs) if outputs else "岡山選手なし"
 
 
 # =========================
