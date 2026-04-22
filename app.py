@@ -11,6 +11,7 @@ st_autorefresh(interval=180000, key="refresh")
 st.title("玉野競輪 投稿生成アプリ")
 
 now = datetime.now(timezone(timedelta(hours=9)))
+today = now.day
 st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
 
 TARGET_PLACE = "玉野"
@@ -28,36 +29,53 @@ def format_name(name):
     return "#" + normalize_name(name)
 
 # =========================
-# 前日判定（encp修正版）
+# 前日判定（完全修正版）
 # =========================
 def get_prev_encp(session):
+
     now = datetime.now(timezone(timedelta(hours=9)))
-    today, month, year = now.day, now.month, now.year
+    today = now.day
+    year = now.year
+    month = now.month
 
     url = f"https://keirin.jp/pc/raceschedule?scyy={year}&scym={str(month).zfill(2)}"
     html = session.get(url, headers=HEADERS).text
     soup = BeautifulSoup(html, "html.parser")
 
     for row in soup.find_all("tr"):
-        if TARGET_PLACE in row.text:
-            tds = row.find_all("td", class_="td_day")
-            day = 1
-            for td in tds:
-                colspan = int(td.get("colspan", 1))
-                if "bk_kaisai" in td.get("class", []):
-                    a = td.find("a")
-                    if a:
-                        href = a.get("href")
-                        if href and "encp=" in href:
-                            encp = re.search(r"encp=([^&]+)", href).group(1)
-                            if day - 1 == today:
-                                st.write(f"DEBUG: 正しいencp={encp}")
-                                return encp
-                day += colspan
+        if TARGET_PLACE not in row.text:
+            continue
+
+        tds = row.find_all("td", class_="td_day")
+
+        day_cursor = 1
+
+        for td in tds:
+            colspan = int(td.get("colspan", 1))
+
+            # 開催セル
+            if "bk_kaisai" in td.get("class", []):
+                a = td.find("a")
+                if a:
+                    href = a.get("href")
+
+                    if href and "encp=" in href:
+                        encp = re.search(r"encp=([^&]+)", href).group(1)
+
+                        start_day = day_cursor
+
+                        # ★ 前日判定
+                        if start_day - 1 == today:
+                            st.write(f"DEBUG: 開催開始日={start_day}")
+                            st.write(f"DEBUG: 前日一致 encp={encp}")
+                            return encp
+
+            day_cursor += colspan
+
     return None
 
 # =========================
-# 前日処理（最終版）
+# 前日処理
 # =========================
 def run_prev_mode(session, encp):
 
@@ -65,7 +83,6 @@ def run_prev_mode(session, encp):
     session.get("https://keirin.jp/pc/top", headers=HEADERS)
     session.get("https://keirin.jp/pc/raceschedule", headers=HEADERS)
 
-    # ★ 正しいURL（racelistに戻す）
     url = f"https://keirin.jp/pc/racelist?encp={encp}"
     res = session.get(url, headers=HEADERS)
 
