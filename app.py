@@ -28,7 +28,7 @@ def format_name(name):
     return "#" + normalize_name(name)
 
 # =========================
-# 前日判定
+# 前日判定（encp修正版）
 # =========================
 def get_prev_encp(session):
     now = datetime.now(timezone(timedelta(hours=9)))
@@ -47,15 +47,17 @@ def get_prev_encp(session):
                 if "bk_kaisai" in td.get("class", []):
                     a = td.find("a")
                     if a:
-                        encp = a.get("data-pprm-encp")
-                        if day - 1 == today:
-                            st.write(f"DEBUG: encp={encp}")
-                            return encp
+                        href = a.get("href")
+                        if href and "encp=" in href:
+                            encp = re.search(r"encp=([^&]+)", href).group(1)
+                            if day - 1 == today:
+                                st.write(f"DEBUG: 正しいencp={encp}")
+                                return encp
                 day += colspan
     return None
 
 # =========================
-# 前日処理（完全修正版）
+# 前日処理（最終版）
 # =========================
 def run_prev_mode(session, encp):
 
@@ -63,8 +65,8 @@ def run_prev_mode(session, encp):
     session.get("https://keirin.jp/pc/top", headers=HEADERS)
     session.get("https://keirin.jp/pc/raceschedule", headers=HEADERS)
 
-    # ★ 正しいURL
-    url = f"https://keirin.jp/pc/raceentrylist?encp={encp}"
+    # ★ 正しいURL（racelistに戻す）
+    url = f"https://keirin.jp/pc/racelist?encp={encp}"
     res = session.get(url, headers=HEADERS)
 
     html = res.text
