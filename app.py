@@ -3,6 +3,7 @@ from streamlit_autorefresh import st_autorefresh
 import requests
 import re
 import json
+from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, timezone
 
 st_autorefresh(interval=180000, key="refresh")
@@ -10,65 +11,74 @@ st_autorefresh(interval=180000, key="refresh")
 st.title("玉野競輪 投稿生成アプリ")
 
 now = datetime.now(timezone(timedelta(hours=9)))
+today = now.day
 st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
 
 TARGET_PLACE = "玉野"
-HASHTAGS = "#玉野けいりん #チャリロトバンク玉野 #競輪"
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0"
-}
+HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 # =========================
-# 前日判定（TOPベース）
+# 前日encp取得（schedule）
 # =========================
-def get_tomorrow_tamano_encp(session):
+def get_prev_encp(session):
 
-    html = session.get("https://keirin.jp/pc/top", headers=HEADERS).text
+    now = datetime.now(timezone(timedelta(hours=9)))
+    today = now.day
+    year = now.year
+    month = now.month
 
-    match = re.search(r"var pc0101_json = (\{.*?\});", html, re.DOTALL)
-    if not match:
-        return None
+    url = f"https://keirin.jp/pc/raceschedule?scyy={year}&scym={str(month).zfill(2)}"
+    html = session.get(url, headers=HEADERS).text
 
-    data = json.loads(match.group(1))
+    soup = BeautifulSoup(html, "html.parser")
 
-    tomorrow = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
+    for row in soup.find_all("tr"):
+        if TARGET_PLACE not in row.text:
+            continue
 
-    for r in data["RaceList"]:
-        if r["keirinjoName"] == TARGET_PLACE and r["kaisaiDate"] == tomorrow:
-            return r["touhyouLivePara"]
+        tds = row.find_all("td", class_="td_day")
+        day_cursor = 1
+
+        for td in tds:
+            colspan = int(td.get("colspan", 1))
+
+            if "bk_kaisai" in td.get("class", []):
+                a = td.find("a")
+                if a:
+                    encp = a.get("data-pprm-encp")
+
+                    # ★ 前日判定
+                    if day_cursor == today + 1:
+                        return encp
+
+            day_cursor += colspan
 
     return None
 
 # =========================
-# 本体（racelistからPJ0302抜く）
+# 本体
 # =========================
 def run_prev_mode(session, encp):
 
-    # ★重要：まずJSJ001で正規encpに変換
-    jsj = session.get(
-        f"https://keirin.jp/pc/json?encp={encp}&type=JSJ001",
+    # ★ encp変換（これが最重要）
+    js = session.get(
+        f"https://keirin.jp/pc/json?encp={encp}&type=PC0201",
         headers=HEADERS
     ).json()
 
-    if "C0201data" not in jsj:
-        return "データ取得失敗(JSJ001)"
+    if "C0201data" not in js:
+        return "PC0201取得失敗"
 
-    real_encp = jsj["C0201data"]["encSelParaK"]
+    real_encp = js["C0201data"]["encSelParaK"]
 
-    # ★ここで初めてracelistが通る
+    # ★ 正しいページ
     url = f"https://keirin.jp/pc/racelist?encp={real_encp}&dkbn=2"
-    res = session.get(url, headers=HEADERS)
-    html = res.text
-
-    st.write(f"DEBUG: status={res.status_code}")
+    html = session.get(url, headers=HEADERS).text
 
     match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
 
     if not match:
-        st.write("DEBUG: PJ0302取得失敗")
-        st.code(html[:500])
-        return "データ取得失敗"
+        return "PJ0302取得失敗"
 
     data = json.loads(match.group(1))
 
@@ -87,7 +97,7 @@ def run_prev_mode(session, encp):
 def main():
     session = requests.Session()
 
-    encp = get_tomorrow_tamano_encp(session)
+    encp = get_prev_encp(session)
 
     if encp:
         st.info("🟡 前日（開催前日）")
