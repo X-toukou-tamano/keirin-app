@@ -18,9 +18,9 @@ TARGET_PLACE = "玉野"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 # =========================
-# 前日encp取得（schedule）
+# 前日判定 + JSON取得
 # =========================
-def get_prev_encp(session):
+def get_prev_data(session):
 
     now = datetime.now(timezone(timedelta(hours=9)))
     today = now.day
@@ -43,44 +43,26 @@ def get_prev_encp(session):
             colspan = int(td.get("colspan", 1))
 
             if "bk_kaisai" in td.get("class", []):
-                a = td.find("a")
-                if a:
-                    encp = a.get("data-pprm-encp")
+                # ★ 前日判定
+                if day_cursor == today + 1:
+                    
+                    # ★ このページのHTMLから直接PJ0302を抜く
+                    match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
 
-                    # ★ 前日判定
-                    if day_cursor == today + 1:
-                        return encp
+                    if not match:
+                        return None
+
+                    data = json.loads(match.group(1))
+                    return data
 
             day_cursor += colspan
 
     return None
 
 # =========================
-# 本体
+# 表示処理
 # =========================
-def run_prev_mode(session, encp):
-
-    # ★ encp変換（これが最重要）
-    js = session.get(
-        f"https://keirin.jp/pc/json?encp={encp}&type=PC0201",
-        headers=HEADERS
-    ).json()
-
-    if "C0201data" not in js:
-        return "PC0201取得失敗"
-
-    real_encp = js["C0201data"]["encSelParaK"]
-
-    # ★ 正しいページ
-    url = f"https://keirin.jp/pc/racelist?encp={real_encp}&dkbn=2"
-    html = session.get(url, headers=HEADERS).text
-
-    match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
-
-    if not match:
-        return "PJ0302取得失敗"
-
-    data = json.loads(match.group(1))
+def run_prev_mode(data):
 
     outputs = []
 
@@ -97,11 +79,11 @@ def run_prev_mode(session, encp):
 def main():
     session = requests.Session()
 
-    encp = get_prev_encp(session)
+    data = get_prev_data(session)
 
-    if encp:
+    if data:
         st.info("🟡 前日（開催前日）")
-        return run_prev_mode(session, encp)
+        return run_prev_mode(data)
     else:
         st.info("⚪ 非開催日")
         return "開催なし"
