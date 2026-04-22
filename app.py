@@ -98,31 +98,39 @@ def get_live_info(session):
     return None, None
 
 # =========================
-# 前日処理（デバッグ強化）
+# 前日処理（完全デバッグ版）
 # =========================
 def run_prev_mode(session, encp):
 
     url = f"https://keirin.jp/pc/raceentry?encp={encp}"
-    html = session.get(url, headers=HEADERS).text
+    res = session.get(url, headers=HEADERS)
 
+    html = res.text
+
+    # ===== 重要ログ =====
+    st.write(f"DEBUG: URL={url}")
+    st.write(f"DEBUG: status={res.status_code}")
+    st.write(f"DEBUG: 最終URL={res.url}")
     st.write(f"DEBUG: HTML長さ={len(html)}")
 
-    # PJ0302存在チェック
-    if "PJ0302" not in html:
-        st.write("DEBUG: PJ0302がHTMLに存在しない")
-    else:
-        st.write("DEBUG: PJ0302文字列は存在")
+    st.write("DEBUG: 先頭300文字👇")
+    st.code(html[:300])
 
-    # JSON抽出（強化版）
+    # キーワード確認
+    st.write("DEBUG: PJ0302 in HTML =", "PJ0302" in html)
+    st.write("DEBUG: jsonData in HTML =", "jsonData" in html)
+    st.write("DEBUG: raceentry in URL =", "raceentry" in res.url)
+
+    # JSON抽出
     match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
 
     if not match:
         st.write("DEBUG: 正規表現ヒットしない")
         return "データ取得失敗"
 
-    json_str = match.group(1)
+    st.write("DEBUG: 正規表現ヒットOK")
 
-    st.write(f"DEBUG: JSON長さ={len(json_str)}")
+    json_str = match.group(1)
 
     try:
         data = json.loads(json_str)
@@ -134,7 +142,6 @@ def run_prev_mode(session, encp):
 
     for gaitei in data["J0302data"]["J0302gaitei"]:
         for p in gaitei["J0302sensyu"]:
-            st.write(f"DEBUG: {p['playerNm']} / {p['hukenName']}")
             if "岡　山" in p["hukenName"]:
                 name = p["playerNm"]
                 text = f"""{TARGET_PLACE}競輪
