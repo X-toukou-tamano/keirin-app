@@ -90,7 +90,7 @@ def run_prev_mode(session, encp):
     session.get("https://keirin.jp/pc/top", headers=HEADERS)
     session.get("https://keirin.jp/pc/raceschedule", headers=HEADERS)
 
-    url = f"https://keirin.jp/pc/racelist?encp={encp}"
+    url = f"https://keirin.jp/pc/participationlist?encp={encp}"
     res = session.get(url, headers=HEADERS)
 
     html = res.text
