@@ -27,12 +27,6 @@ def normalize_name(name):
 def format_name(name):
     return "#" + normalize_name(name)
 
-def get_day_label(kaisai_list):
-    for k in kaisai_list:
-        if k["flgSelect"]:
-            return k["txtDaily"].replace("(", "").replace(")", "")
-    return ""
-
 # =========================
 # 前日判定
 # =========================
@@ -61,23 +55,25 @@ def get_prev_encp(session):
     return None
 
 # =========================
-# 前日処理（最終版）
+# 前日処理（完全修正版）
 # =========================
 def run_prev_mode(session, encp):
 
-    # 🔥 遷移再現
+    # 遷移再現
     session.get("https://keirin.jp/pc/top", headers=HEADERS)
     session.get("https://keirin.jp/pc/raceschedule", headers=HEADERS)
 
-    url = f"https://keirin.jp/pc/racelist?encp={encp}"
+    # ★ 正しいURL
+    url = f"https://keirin.jp/pc/raceentrylist?encp={encp}"
     res = session.get(url, headers=HEADERS)
 
     html = res.text
 
+    st.write(f"DEBUG: URL={url}")
     st.write(f"DEBUG: status={res.status_code}")
     st.write(f"DEBUG: HTML長さ={len(html)}")
 
-    # PJ0302抽出（広め）
+    # JSON抽出
     match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
 
     if not match:
@@ -115,7 +111,6 @@ def main():
     if prev_encp:
         st.info("🟡 前日（開催前日）")
         return run_prev_mode(session, prev_encp)
-
     else:
         st.info("⚪ 非開催日")
         return "開催なし"
