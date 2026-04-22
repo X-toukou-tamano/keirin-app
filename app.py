@@ -100,7 +100,14 @@ def get_prev_encp(session):
 
     infos = get_start_info(row)
     for r in infos:
+
+        # 通常ケース
         if r["prev"] == today:
+            return r["encp"]
+
+        # 月末ケース（翌月1日開催）
+        last_day = (now.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        if today == last_day.day and r["start"] == 1:
             return r["encp"]
 
     return None
