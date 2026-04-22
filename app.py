@@ -17,19 +17,13 @@ st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
 TARGET_PLACE = "玉野"
 HASHTAGS = "#玉野けいりん #チャリロトバンク玉野 #競輪"
 
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+}
 
 # =========================
-# 共通
-# =========================
-def normalize_name(name):
-    return name.replace("　", "").replace(" ", "")
-
-def format_name(name):
-    return "#" + normalize_name(name)
-
-# =========================
-# 前日判定（修正版）
+# 前日判定
 # =========================
 def get_prev_encp(session):
 
@@ -46,63 +40,72 @@ def get_prev_encp(session):
     soup = BeautifulSoup(html, "html.parser")
 
     for row in soup.find_all("tr"):
-
         if TARGET_PLACE not in row.text:
             continue
 
         st.write("DEBUG: 玉野の行検出")
 
         tds = row.find_all("td", class_="td_day")
-
         day_cursor = 1
 
         for td in tds:
             colspan = int(td.get("colspan", 1))
 
             if "bk_kaisai" in td.get("class", []):
-
                 a = td.find("a")
-
                 if a:
-                    # ★ 正しいencp取得
                     encp = a.get("data-pprm-encp")
                     st.write(f"DEBUG: encp候補={encp}")
 
-                    start_day = day_cursor
-                    st.write(f"DEBUG: 開催開始日={start_day}")
-
-                    # ★ 前日判定（修正）
-                    if start_day == today + 1:
+                    if day_cursor == today + 1:
                         st.write(f"DEBUG: ★前日一致 encp={encp}")
                         return encp
 
             day_cursor += colspan
 
-    st.write("DEBUG: 前日ヒットなし")
     return None
 
 # =========================
-# 前日処理
+# 前日処理（通信ログ版）
 # =========================
 def run_prev_mode(session, encp):
 
-    # 遷移再現
+    # ブラウザ遷移再現
     session.get("https://keirin.jp/pc/top", headers=HEADERS)
     session.get("https://keirin.jp/pc/raceschedule", headers=HEADERS)
 
+    # ★まずGETで確認
     url = f"https://keirin.jp/pc/participationlist?encp={encp}"
     res = session.get(url, headers=HEADERS)
 
-    html = res.text
+    st.write("====== GET確認 ======")
+    st.write("URL:", url)
+    st.write("status:", res.status_code)
+    st.write("headers:", dict(res.headers))
+    st.write("最終URL:", res.url)
+    st.write("HTML先頭:")
+    st.code(res.text[:300])
 
-    st.write(f"DEBUG: racelist status={res.status_code}")
-    st.write(f"DEBUG: racelist HTML長さ={len(html)}")
+    # ★POSTでも試す（これが本命）
+    st.write("====== POST確認 ======")
 
-    match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
+    post_url = "https://keirin.jp/pc/participationlist"
+    payload = {
+        "encp": encp
+    }
+
+    res_post = session.post(post_url, data=payload, headers=HEADERS)
+
+    st.write("POST status:", res_post.status_code)
+    st.write("POST URL:", post_url)
+    st.write("POST HTML先頭:")
+    st.code(res_post.text[:300])
+
+    # PJ0302抽出
+    match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", res_post.text)
 
     if not match:
-        st.write("DEBUG: PJ0302取得失敗")
-        st.code(html[:500])
+        st.write("DEBUG: PJ0302取れない")
         return "データ取得失敗"
 
     st.write("DEBUG: PJ0302取得成功")
@@ -111,18 +114,12 @@ def run_prev_mode(session, encp):
 
     outputs = []
 
-    for gaitei in data["J0302data"]["J0302gaitei"]:
-        for p in gaitei["J0302sensyu"]:
+    for g in data["J0302data"]["J0302gaitei"]:
+        for p in g["J0302sensyu"]:
             if "岡　山" in p["hukenName"]:
-                name = p["playerNm"]
-                text = f"""{TARGET_PLACE}競輪
-地元選手より、意気込みをいただきました！
-{name}選手 「」
-{HASHTAGS}
-"""
-                outputs.append(text)
+                outputs.append(p["playerNm"])
 
-    return "\n\n----------------------\n\n".join(outputs) if outputs else "岡山選手なし"
+    return "\n".join(outputs) if outputs else "岡山選手なし"
 
 # =========================
 # メイン
@@ -130,11 +127,11 @@ def run_prev_mode(session, encp):
 def main():
     session = requests.Session()
 
-    prev_encp = get_prev_encp(session)
+    encp = get_prev_encp(session)
 
-    if prev_encp:
+    if encp:
         st.info("🟡 前日（開催前日）")
-        return run_prev_mode(session, prev_encp)
+        return run_prev_mode(session, encp)
     else:
         st.info("⚪ 非開催日")
         return "開催なし"
