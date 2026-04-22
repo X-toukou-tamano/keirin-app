@@ -98,58 +98,43 @@ def get_live_info(session):
     return None, None
 
 # =========================
-# 前日処理（完全デバッグ版）
+# 前日処理（JSON直取り）
 # =========================
 def run_prev_mode(session, encp):
 
-    url = f"https://keirin.jp/pc/raceentry?encp={encp}"
+    url = f"https://keirin.jp/pc/json?encp={encp}&type=PC0201"
     res = session.get(url, headers=HEADERS)
 
-    html = res.text
-
-    # ===== 重要ログ =====
     st.write(f"DEBUG: URL={url}")
     st.write(f"DEBUG: status={res.status_code}")
-    st.write(f"DEBUG: 最終URL={res.url}")
-    st.write(f"DEBUG: HTML長さ={len(html)}")
-
-    st.write("DEBUG: 先頭300文字👇")
-    st.code(html[:300])
-
-    # キーワード確認
-    st.write("DEBUG: PJ0302 in HTML =", "PJ0302" in html)
-    st.write("DEBUG: jsonData in HTML =", "jsonData" in html)
-    st.write("DEBUG: raceentry in URL =", "raceentry" in res.url)
-
-    # JSON抽出
-    match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
-
-    if not match:
-        st.write("DEBUG: 正規表現ヒットしない")
-        return "データ取得失敗"
-
-    st.write("DEBUG: 正規表現ヒットOK")
-
-    json_str = match.group(1)
 
     try:
-        data = json.loads(json_str)
+        data = res.json()
     except Exception as e:
-        st.write(f"DEBUG: JSONパース失敗: {e}")
-        return "JSONパース失敗"
+        st.write(f"DEBUG: JSON取得失敗 {e}")
+        return "データ取得失敗"
+
+    st.write("DEBUG: JSONキー一覧", list(data.keys()))
 
     outputs = []
 
-    for gaitei in data["J0302data"]["J0302gaitei"]:
-        for p in gaitei["J0302sensyu"]:
-            if "岡　山" in p["hukenName"]:
-                name = p["playerNm"]
-                text = f"""{TARGET_PLACE}競輪
+    try:
+        # ★ ここが本体
+        for gaitei in data["J0302data"]["J0302gaitei"]:
+            for p in gaitei["J0302sensyu"]:
+                st.write(f"DEBUG: {p['playerNm']} / {p['hukenName']}")
+                if "岡　山" in p["hukenName"]:
+                    name = p["playerNm"]
+                    text = f"""{TARGET_PLACE}競輪
 地元選手より、意気込みをいただきました！
 {name}選手 「」
 {HASHTAGS}
 """
-                outputs.append(text)
+                    outputs.append(text)
+
+    except Exception as e:
+        st.write(f"DEBUG: 構造エラー {e}")
+        return "データ構造エラー"
 
     return "\n\n----------------------\n\n".join(outputs) if outputs else "岡山選手なし"
 
