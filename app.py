@@ -61,7 +61,7 @@ def is_day4_target(name):
     return "決勝" in name
 
 # =========================
-# 前日ロジック（修正版）
+# 前日ロジック
 # =========================
 def get_html(session, year, month):
     url = f"https://keirin.jp/pc/raceschedule?scyy={year}&scym={str(month).zfill(2)}"
@@ -105,37 +105,57 @@ def get_prev_encp(session):
 
     return None
 
-# ★★★★★ ここが完全修正ポイント ★★★★★
+def extract_okayama_players(html):
+    soup = BeautifulSoup(html, "html.parser")
+    players = []
+    for row in soup.find_all("tr"):
+        tds = row.find_all("td")
+        if len(tds) < 3:
+            continue
+        if "岡山" in tds[2].get_text():
+            players.append(tds[2].get_text(strip=True))
+    return players
+
+def extract_event_info(html):
+    soup = BeautifulSoup(html, "html.parser")
+    title, grade = "", ""
+    title_tag = soup.find("div", class_="raceTitle")
+    if title_tag:
+        title = title_tag.get_text(strip=True)
+    grade_img = soup.find("img", class_="gradeIconSize")
+    if grade_img:
+        grade = grade_img.get("alt", "")
+    return title, grade
+
+# =========================
+# ★ここだけ修正（前日）
+# =========================
 def run_prev_mode(session, encp):
 
-    # 事前遷移（重要）
+    place_name = build_place_name(TARGET_PLACE)
+
     session.get("https://keirin.jp/pc/top", headers=HEADERS)
     session.get("https://keirin.jp/pc/raceschedule", headers=HEADERS)
 
-    # POSTでracelist取得（PJ0302）
-    url = "https://keirin.jp/pc/racelist"
-    payload = {
-        "encp": encp,
-        "disp": "PJ0302"
-    }
+    res = session.post(
+        "https://keirin.jp/pc/racelist",
+        data={"encp": encp, "disp": "PJ0302"},
+        headers=HEADERS
+    )
 
-    res = session.post(url, data=payload, headers=HEADERS)
     html = res.text
 
-    # PJ0302抽出
     match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
-
     if not match:
         return "PJ0302取得失敗"
 
     data = json.loads(match.group(1))
 
-    # タイトル取得
+    match_pc = re.search(r"jsonData\['PC0201'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
     title = ""
-    try:
-        title = data["J0302data"]["J0302gaitei"][0]["bangumiName"]
-    except:
-        title = ""
+    if match_pc:
+        pc = json.loads(match_pc.group(1))
+        title = pc["C0201data"]["raceName"]
 
     outputs = []
     seen = set()
@@ -151,7 +171,7 @@ def run_prev_mode(session, encp):
                     continue
                 seen.add(key)
 
-                text = f"""{TARGET_PLACE}競輪
+                text = f"""{place_name}
 「{title}」
 地元選手より、意気込みをいただきました！
 {name}選手 「」
@@ -162,7 +182,7 @@ def run_prev_mode(session, encp):
     return "\n\n----------------------\n\n".join(outputs) if outputs else "岡山選手なし"
 
 # =========================
-# 開催中ロジック（そのまま）
+# 開催中ロジック
 # =========================
 def get_top_json(session):
     html = session.get("https://keirin.jp/pc/top", headers=HEADERS).text
@@ -183,7 +203,6 @@ def get_live_encp(session):
     return None
 
 def run_live_mode(session, temp_enc):
-
     jsj001 = session.get(
         f"https://keirin.jp/pc/json?encp={temp_enc}&type=JSJ001",
         headers=HEADERS
@@ -278,6 +297,24 @@ def run_live_mode(session, temp_enc):
 """
         outputs.append(text)
 
+        if "初日" in day_label:
+            winner_name = result_raw[0][1]
+            key = normalize_name(winner_name)
+            info = player_dict.get(key, {"pref": "不明", "term": "不明"})
+
+            intro = f"""{place_name}
+「{title}」({grade}{day_type})
+
+勝利選手の写真とレース後のコメントです！
+
+{day_label}　第{race_no}
+{winner_name}（{info['pref']}）{info['term']}期
+「」
+
+{HASHTAGS}
+"""
+            outputs.append(intro)
+
     return "\n\n----------------------\n\n".join(outputs)
 
 # =========================
@@ -287,12 +324,20 @@ def main():
     try:
         session = requests.Session()
 
-        # 開催中優先
+        top_res = session.get("https://keirin.jp/pc/top", headers=HEADERS)
+        match = re.search(r"var pc0101_json = (\{.*?\});", top_res.text, re.DOTALL)
+        if match:
+            top = json.loads(match.group(1))
+            live_list = top.get("RaceList", [])
+            if live_list:
+                auth_encp = live_list[0].get("touhyouLivePara")
+                auth_url = f"https://keirin.jp/pc/json?encp={auth_encp}&type=JSJ048&kanyusyaflg=1&kaisaikbikbn=1"
+                session.get(auth_url, headers=HEADERS)
+
         live_encp = get_live_encp(session)
         if live_encp:
             return run_live_mode(session, live_encp)
 
-        # 前日
         prev_encp = get_prev_encp(session)
         if prev_encp:
             return run_prev_mode(session, prev_encp)
