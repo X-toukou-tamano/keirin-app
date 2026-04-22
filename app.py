@@ -29,7 +29,7 @@ def format_name(name):
     return "#" + normalize_name(name)
 
 # =========================
-# 前日判定（ログ強化版）
+# 前日判定（修正版）
 # =========================
 def get_prev_encp(session):
 
@@ -42,8 +42,6 @@ def get_prev_encp(session):
 
     url = f"https://keirin.jp/pc/raceschedule?scyy={year}&scym={str(month).zfill(2)}"
     html = session.get(url, headers=HEADERS).text
-
-    st.write(f"DEBUG: schedule HTML長さ={len(html)}")
 
     soup = BeautifulSoup(html, "html.parser")
 
@@ -61,28 +59,22 @@ def get_prev_encp(session):
         for td in tds:
             colspan = int(td.get("colspan", 1))
 
-            st.write(f"DEBUG: day_cursor={day_cursor}, colspan={colspan}, classes={td.get('class')}")
-
             if "bk_kaisai" in td.get("class", []):
-
-                st.write(f"DEBUG: 開催セル発見 day_cursor={day_cursor}")
 
                 a = td.find("a")
 
                 if a:
-                    href = a.get("href")
-                    st.write(f"DEBUG: href={href}")
+                    # ★ 正しいencp取得
+                    encp = a.get("data-pprm-encp")
+                    st.write(f"DEBUG: encp候補={encp}")
 
-                    if href and "encp=" in href:
-                        encp = re.search(r"encp=([^&]+)", href).group(1)
+                    start_day = day_cursor
+                    st.write(f"DEBUG: 開催開始日={start_day}")
 
-                        start_day = day_cursor
-                        st.write(f"DEBUG: 開催開始日={start_day}")
-                        st.write(f"DEBUG: 前日候補={start_day - 1}")
-
-                        if start_day - 1 == today:
-                            st.write(f"DEBUG: ★前日一致 encp={encp}")
-                            return encp
+                    # ★ 前日判定（修正）
+                    if start_day == today + 1:
+                        st.write(f"DEBUG: ★前日一致 encp={encp}")
+                        return encp
 
             day_cursor += colspan
 
@@ -94,6 +86,7 @@ def get_prev_encp(session):
 # =========================
 def run_prev_mode(session, encp):
 
+    # 遷移再現
     session.get("https://keirin.jp/pc/top", headers=HEADERS)
     session.get("https://keirin.jp/pc/raceschedule", headers=HEADERS)
 
