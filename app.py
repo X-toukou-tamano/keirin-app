@@ -98,11 +98,11 @@ def get_live_info(session):
     return None, None
 
 # =========================
-# 前日処理（JSON直取り）
+# 前日処理（PJ0302）
 # =========================
 def run_prev_mode(session, encp):
 
-    url = f"https://keirin.jp/pc/json?encp={encp}&type=PC0201"
+    url = f"https://keirin.jp/pc/json?encp={encp}&type=PJ0302"
     res = session.get(url, headers=HEADERS)
 
     st.write(f"DEBUG: URL={url}")
@@ -119,7 +119,6 @@ def run_prev_mode(session, encp):
     outputs = []
 
     try:
-        # ★ ここが本体
         for gaitei in data["J0302data"]["J0302gaitei"]:
             for p in gaitei["J0302sensyu"]:
                 st.write(f"DEBUG: {p['playerNm']} / {p['hukenName']}")
