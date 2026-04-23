@@ -320,7 +320,7 @@ def run_live_mode(session, temp_enc):
 
 {HASHTAGS}
 """
-        outputs.append(text)
+        outputs.append(intro)
 
         if "初日" in day_label:
             winner_name = result_raw[0][1]
