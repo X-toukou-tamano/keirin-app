@@ -261,9 +261,9 @@ def run_live_mode(session, temp_enc):
 
         result_raw = []
         for block, pos in [
-            ("tyakui1List", 1),
-            ("tyakui2List", 2),
-            ("tyakui3List", 3)
+            ("tyakui1List", 1)　選手,
+            ("tyakui2List", 2)　選手,
+            ("tyakui3List", 3)　選手
         ]:
             for p in race.get(block, []):
                 result_raw.append((pos, p["rclblSensyuName"]))
