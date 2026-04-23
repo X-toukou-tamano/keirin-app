@@ -225,8 +225,8 @@ def run_live_mode(session, temp_enc):
     enc_map = {f"{i+1}R": r["encParaR"] for i, r in enumerate(data["C0201race"])}
 
     title = data["raceName"]
-    grade = convert_grade(data["imgGradeAlt"]) + day_type
     day_type = convert_day_type_from_icon(data["imgFuka1Alt"])
+    grade = convert_grade(data["imgGradeAlt"])
     day_label = get_day_label(data["C0201kaisai"])
     place_name = build_place_name(TARGET_PLACE)
 
@@ -295,7 +295,6 @@ def run_live_mode(session, temp_enc):
         winner = format_name(result_raw[0][1])
 
         text = f"""{place_name}
-text = f"""{place_name}
 「{title}」({grade}{day_type})
 {day_label}　第{race_no}
 
@@ -305,24 +304,6 @@ text = f"""{place_name}
 {HASHTAGS}
 """
         outputs.append(text)
-
-        if "初日" in day_label:
-            winner_name = result_raw[0][1]
-            key = normalize_name(winner_name)
-            info = player_dict.get(key, {"pref": "不明", "term": "不明"})
-
-            intro = f"""{place_name}
-「{title}」({grade}{day_type})
-
-勝利選手の写真とレース後のコメントです！
-
-{day_label}　第{race_no}
-{winner_name} 選手（{info['pref']}）{info['term']}期
-「」
-
-{HASHTAGS}
-"""
-        outputs.append(intro)
 
         if "初日" in day_label:
             winner_name = result_raw[0][1]
