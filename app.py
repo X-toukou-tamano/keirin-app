@@ -99,7 +99,7 @@ def get_start_info(row):
             if a:
                 encp = a.get("data-pprm-encp")
                 result.append({"start": day, "prev": day - 1, "encp": encp})
-        day += colspan
+    day += colspan
     return result
 
 def get_prev_encp(session):
