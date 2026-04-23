@@ -272,6 +272,8 @@ def run_live_mode(session, temp_enc):
             if not is_day4_target(race_name):
                 continue
 
+        # 車番リストの作成
+        shaban_list = []
         result_raw = []
         for block, pos in [
             ("tyakui1List", 1),
@@ -280,6 +282,10 @@ def run_live_mode(session, temp_enc):
         ]:
             for p in race.get(block, []):
                 result_raw.append((pos, p["rclblSensyuName"]))
+                if pos <= 3:
+                    shaban_list.append(p["rclblSaban"])
+        
+        shaban_text = "-".join(shaban_list)
 
         enc_r = enc_map.get(race_no)
 
@@ -301,18 +307,18 @@ def run_live_mode(session, temp_enc):
             key = normalize_name(raw_name)
             info = player_dict.get(key, {"pref": "不明", "term": "不明"})
             lines.append(
-                f"{pos}着　{format_name(raw_name)} （{info['pref']}）{info['term']}期"
+                f"{pos}着　{format_name(raw_name)} 選手 （{info['pref']}） {info['term']}期"
             )
 
         winner = format_name(result_raw[0][1])
 
         text = f"""{place_name}
-「{title}」({grade}{day_type})
-{day_label}　第{race_no}
+「{title}」 ({grade}{day_type})
+{day_label}　第{race_no}　{shaban_text}
 
 {chr(10).join(lines)}
 
-{winner} おめでとうございます！
+{winner} 選手おめでとうございます！
 {HASHTAGS}
 """
         outputs.append(text)
@@ -323,12 +329,12 @@ def run_live_mode(session, temp_enc):
             info = player_dict.get(key, {"pref": "不明", "term": "不明"})
 
             intro = f"""{place_name}
-「{title}」({grade}{day_type})
+「{title}」 ({grade}{day_type})
 
 勝利選手の写真とレース後のコメントです！
 
-{day_label}　第{race_no}
-{winner_name}（{info['pref']}）{info['term']}期
+第{race_no}
+{winner_name} 選手 （{info['pref']}） {info['term']}期
 「」
 
 {HASHTAGS}
