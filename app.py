@@ -101,11 +101,9 @@ def get_prev_encp(session):
     infos = get_start_info(row)
     for r in infos:
 
-        # 通常ケース
         if r["prev"] == today:
             return r["encp"]
 
-        # 月末ケース（翌月1日開催）
         last_day = (now.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
         if today == last_day.day and r["start"] == 1:
             return r["encp"]
@@ -209,6 +207,25 @@ def get_live_encp(session):
 
     return None
 
+# ★追加（ここだけ）
+def convert_kubun(val):
+    return {
+        "1": "D",
+        "3": "N",
+        "5": "MID"
+    }.get(val, "")
+
+def get_kubun_from_top(session):
+    top = get_top_json(session)
+    if not top:
+        return ""
+
+    for r in top["RaceList"]:
+        if r["keirinjoName"] == TARGET_PLACE:
+            return convert_kubun(r.get("kubunIconName"))
+
+    return ""
+
 def run_live_mode(session, temp_enc):
     jsj001 = session.get(
         f"https://keirin.jp/pc/json?encp={temp_enc}&type=JSJ001",
@@ -229,7 +246,9 @@ def run_live_mode(session, temp_enc):
     enc_map = {f"{i+1}R": r["encParaR"] for i, r in enumerate(data["C0201race"])}
 
     title = data["raceName"]
-    day_type = convert_day_type_from_icon(data["imgFuka1Alt"])
+
+    # ★ここだけ修正
+    day_type = get_kubun_from_top(session)
     
     # ===== ログ追加（変換後）=====
     st.write("DEBUG day_type:", day_type)
