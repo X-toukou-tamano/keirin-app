@@ -178,7 +178,6 @@ def run_prev_mode(session, encp):
                     continue
                 seen.add(key)
 
-# 修正箇所
                 text = f"""{place_name}
 「{title}」({convert_grade(data['J0302data']['imgGradeAlt'])}{convert_day_type_from_icon(data['J0302data']['imgFuka1Alt'])})
 地元選手より、意気込みをいただきました！
@@ -221,11 +220,21 @@ def run_live_mode(session, temp_enc):
 
     data = jsj001["C0201data"]
 
+    # ===== ログ追加（ここだけ）=====
+    st.write("DEBUG imgFuka1Alt:", data.get("imgFuka1Alt"))
+    st.write("DEBUG imgGradeAlt:", data.get("imgGradeAlt"))
+    # ==============================
+
     enc = data["encSelParaR"]
     enc_map = {f"{i+1}R": r["encParaR"] for i, r in enumerate(data["C0201race"])}
 
     title = data["raceName"]
     day_type = convert_day_type_from_icon(data["imgFuka1Alt"])
+    
+    # ===== ログ追加（変換後）=====
+    st.write("DEBUG day_type:", day_type)
+    # ============================
+
     grade = convert_grade(data["imgGradeAlt"])
     day_label = get_day_label(data["C0201kaisai"])
     place_name = build_place_name(TARGET_PLACE)
