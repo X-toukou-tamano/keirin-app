@@ -237,17 +237,12 @@ def run_live_mode(session, temp_enc):
 
     data = jsj001["C0201data"]
 
-    # ==============================
-
     enc = data["encSelParaR"]
     enc_map = {f"{i+1}R": r["encParaR"] for i, r in enumerate(data["C0201race"])}
 
     title = data["raceName"]
 
-    # ★ここだけ修正
     day_type = get_kubun_from_top(session)
-    
-    # ============================
 
     grade = convert_grade(data["imgGradeAlt"])
     day_label = get_day_label(data["C0201kaisai"])
@@ -291,7 +286,10 @@ def run_live_mode(session, temp_enc):
             ("tyakui3List", 3)
         ]:
             for p in race.get(block, []):
-                result_raw.append((pos, p["rclblSensyuName"]))
+                result_raw.append((pos, p["rclblSensyuName"], p["rclblSyaban"]))
+
+        numbers = [str(x[2]) for x in result_raw]
+        num_text = "-".join(numbers)
 
         enc_r = enc_map.get(race_no)
 
@@ -309,7 +307,7 @@ def run_live_mode(session, temp_enc):
             }
 
         lines = []
-        for pos, raw_name in result_raw:
+        for pos, raw_name, _ in result_raw:
             key = normalize_name(raw_name)
             info = player_dict.get(key, {"pref": "不明", "term": "不明"})
             lines.append(
@@ -320,7 +318,7 @@ def run_live_mode(session, temp_enc):
 
         text = f"""{place_name}
 「{title}」({grade}{day_type})
-{day_label}　第{race_no}
+{day_label}　第{race_no}　　　{num_text}
 
 {chr(10).join(lines)}
 
