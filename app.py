@@ -261,9 +261,9 @@ def run_live_mode(session, temp_enc):
 
         result_raw = []
         for block, pos in [
-            ("tyakui1List", 1)　選手,
-            ("tyakui2List", 2)　選手,
-            ("tyakui3List", 3)　選手
+            ("tyakui1List", 1),
+            ("tyakui2List", 2),
+            ("tyakui3List", 3)
         ]:
             for p in race.get(block, []):
                 result_raw.append((pos, p["rclblSensyuName"]))
@@ -288,7 +288,7 @@ def run_live_mode(session, temp_enc):
             key = normalize_name(raw_name)
             info = player_dict.get(key, {"pref": "不明", "term": "不明"})
             lines.append(
-                f"{pos}着　{format_name(raw_name)} （{info['pref']}）{info['term']}期"
+                f"{pos}着　{format_name(raw_name)} 選手（{info['pref']}）{info['term']}期"
             )
 
         winner = format_name(result_raw[0][1])
@@ -299,7 +299,7 @@ def run_live_mode(session, temp_enc):
 
 {chr(10).join(lines)}
 
-{winner} 　選手おめでとうございます！
+{winner} 選手おめでとうございます！
 {HASHTAGS}
 """
         outputs.append(text)
@@ -315,7 +315,7 @@ def run_live_mode(session, temp_enc):
 勝利選手の写真とレース後のコメントです！
 
 {day_label}　第{race_no}
-{winner_name}　選手（{info['pref']}）{info['term']}期
+{winner_name} 選手（{info['pref']}）{info['term']}期
 「」
 
 {HASHTAGS}
