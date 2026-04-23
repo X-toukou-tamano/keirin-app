@@ -265,15 +265,15 @@ def run_live_mode(session, temp_enc):
 
     for race in result_json["resultList"]:
 
-    if not race["tyakui1List"]:
-        continue
+    　if not race["tyakui1List"]:
+        　continue
 
-    st.write(race["tyakui1List"])
-    st.write(race["tyakui2List"])
-    st.write(race["tyakui3List"])
+    　st.write(race["tyakui1List"])
+   　 st.write(race["tyakui2List"])
+   　 st.write(race["tyakui3List"])
 
-    race_no = race["rclblRaceNo"]
-    race_name = race["rclblSyumokuName"]
+   　 race_no = race["rclblRaceNo"]
+   　 race_name = race["rclblSyumokuName"]
 
         if "初日" in day_label:
             pass
