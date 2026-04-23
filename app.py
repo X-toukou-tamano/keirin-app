@@ -320,6 +320,24 @@ def run_live_mode(session, temp_enc):
 
 {HASHTAGS}
 """
+        outputs.append(text)
+
+        if "初日" in day_label:
+            winner_name = result_raw[0][1]
+            key = normalize_name(winner_name)
+            info = player_dict.get(key, {"pref": "不明", "term": "不明"})
+
+            intro = f"""{place_name}
+「{title}」({grade}{day_type})
+
+勝利選手の写真とレース後のコメントです！
+
+{day_label}　第{race_no}
+{winner_name} 選手（{info['pref']}）{info['term']}期
+「」
+
+{HASHTAGS}
+"""
             outputs.append(intro)
 
     return "\n\n----------------------\n\n".join(outputs)
