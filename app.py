@@ -5,7 +5,20 @@ import re
 import json
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, timezone
+# --- 【ここに追加】パスワード保護のコード ---
+if "auth" not in st.session_state:
+    st.session_state.auth = False
 
+def check_password():
+    if st.session_state["pwd"] == "tamano0401": # ← 好きなパスワードに変更してください
+        st.session_state.auth = True
+    else:
+        st.error("パスワードが正しくありません")
+
+if not st.session_state.auth:
+    st.text_input("パスワードを入力してください", type="password", on_change=check_password, key="pwd")
+    st.stop()
+# ------------------------------------------
 # =========================
 # 自動更新（3分）
 # =========================
@@ -86,7 +99,7 @@ def get_start_info(row):
             if a:
                 encp = a.get("data-pprm-encp")
                 result.append({"start": day, "prev": day - 1, "encp": encp})
-        day += colspan
+    day += colspan
     return result
 
 def get_prev_encp(session):
@@ -259,14 +272,27 @@ def run_live_mode(session, temp_enc):
             if not is_day4_target(race_name):
                 continue
 
+        # 【追加】車番リストと着順情報の取得
+        shaban_list = []
         result_raw = []
-        for block, pos in [
-            ("tyakui1List", 1),
-            ("tyakui2List", 2),
-            ("tyakui3List", 3)
-        ]:
-            for p in race.get(block, []):
-                result_raw.append((pos, p["rclblSensyuName"]))
+        
+        # 1着, 2着, 3着の情報を順番に処理
+        if race.get("tyakui1List"):
+            p1 = race["tyakui1List"][0]
+            result_raw.append((1, p1["rclblSensyuName"]))
+            shaban_list.append(p1["rclblSaban"])
+            
+        if race.get("tyakui2List"):
+            p2 = race["tyakui2List"][0]
+            result_raw.append((2, p2["rclblSensyuName"]))
+            shaban_list.append(p2["rclblSaban"])
+            
+        if race.get("tyakui3List"):
+            p3 = race["tyakui3List"][0]
+            result_raw.append((3, p3["rclblSensyuName"]))
+            shaban_list.append(p3["rclblSaban"])
+        
+        shaban_text = "-".join(shaban_list)
 
         enc_r = enc_map.get(race_no)
 
@@ -288,18 +314,18 @@ def run_live_mode(session, temp_enc):
             key = normalize_name(raw_name)
             info = player_dict.get(key, {"pref": "不明", "term": "不明"})
             lines.append(
-                f"{pos}着　{format_name(raw_name)} （{info['pref']}）{info['term']}期"
+                f"{pos}着　{format_name(raw_name)} 選手 （{info['pref']}） {info['term']}期"
             )
 
         winner = format_name(result_raw[0][1])
 
         text = f"""{place_name}
-「{title}」({grade}{day_type})
-{day_label}　第{race_no}
+「{title}」 ({grade}{day_type})
+{day_label}　第{race_no}　{shaban_text}
 
 {chr(10).join(lines)}
 
-{winner} おめでとうございます！
+{winner} 選手おめでとうございます！
 {HASHTAGS}
 """
         outputs.append(text)
@@ -310,12 +336,12 @@ def run_live_mode(session, temp_enc):
             info = player_dict.get(key, {"pref": "不明", "term": "不明"})
 
             intro = f"""{place_name}
-「{title}」({grade}{day_type})
+「{title}」 ({grade}{day_type})
 
 勝利選手の写真とレース後のコメントです！
 
-{day_label}　第{race_no}
-{winner_name}（{info['pref']}）{info['term']}期
+第{race_no}
+{winner_name} 選手 （{info['pref']}） {info['term']}期
 「」
 
 {HASHTAGS}
