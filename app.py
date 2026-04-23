@@ -178,8 +178,9 @@ def run_prev_mode(session, encp):
                     continue
                 seen.add(key)
 
+# 修正箇所
                 text = f"""{place_name}
-「{title}」
+「{title}」({convert_grade(data['J0302data']['imgGradeAlt'])}{convert_day_type_from_icon(data['J0302data']['imgFuka1Alt'])})
 地元選手より、意気込みをいただきました！
 {name}選手 「」
 {HASHTAGS}
@@ -224,7 +225,7 @@ def run_live_mode(session, temp_enc):
     enc_map = {f"{i+1}R": r["encParaR"] for i, r in enumerate(data["C0201race"])}
 
     title = data["raceName"]
-    grade = convert_grade(data["imgGradeAlt"])
+    grade = convert_grade(data["imgGradeAlt"]) + day_type
     day_type = convert_day_type_from_icon(data["imgFuka1Alt"])
     day_label = get_day_label(data["C0201kaisai"])
     place_name = build_place_name(TARGET_PLACE)
@@ -294,6 +295,7 @@ def run_live_mode(session, temp_enc):
         winner = format_name(result_raw[0][1])
 
         text = f"""{place_name}
+text = f"""{place_name}
 「{title}」({grade}{day_type})
 {day_label}　第{race_no}
 
