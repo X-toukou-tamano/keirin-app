@@ -299,7 +299,7 @@ def run_live_mode(session, temp_enc):
 
 {chr(10).join(lines)}
 
-{winner} おめでとうございます！
+{winner} 　選手おめでとうございます！
 {HASHTAGS}
 """
         outputs.append(text)
@@ -315,7 +315,7 @@ def run_live_mode(session, temp_enc):
 勝利選手の写真とレース後のコメントです！
 
 {day_label}　第{race_no}
-{winner_name}（{info['pref']}）{info['term']}期
+{winner_name}　選手（{info['pref']}）{info['term']}期
 「」
 
 {HASHTAGS}
