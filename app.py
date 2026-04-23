@@ -237,9 +237,6 @@ def run_live_mode(session, temp_enc):
 
     data = jsj001["C0201data"]
 
-    # ===== ログ追加（ここだけ）=====
-    st.write("DEBUG imgFuka1Alt:", data.get("imgFuka1Alt"))
-    st.write("DEBUG imgGradeAlt:", data.get("imgGradeAlt"))
     # ==============================
 
     enc = data["encSelParaR"]
@@ -250,8 +247,6 @@ def run_live_mode(session, temp_enc):
     # ★ここだけ修正
     day_type = get_kubun_from_top(session)
     
-    # ===== ログ追加（変換後）=====
-    st.write("DEBUG day_type:", day_type)
     # ============================
 
     grade = convert_grade(data["imgGradeAlt"])
