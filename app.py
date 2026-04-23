@@ -267,7 +267,13 @@ def run_live_mode(session, temp_enc):
 
         if not race["tyakui1List"]:
             continue
+# ★ここに入れる
+    st.write(race["tyakui1List"])
+    st.write(race["tyakui2List"])
+    st.write(race["tyakui3List"])
 
+
+        
         race_no = race["rclblRaceNo"]
         race_name = race["rclblSyumokuName"]
 
