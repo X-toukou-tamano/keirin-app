@@ -5,7 +5,20 @@ import re
 import json
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, timezone
+# --- 【ここに追加】パスワード保護のコード ---
+if "auth" not in st.session_state:
+    st.session_state.auth = False
 
+def check_password():
+    if st.session_state["pwd"] == "tamano0401": # ← 好きなパスワードに変更してください
+        st.session_state.auth = True
+    else:
+        st.error("パスワードが正しくありません")
+
+if not st.session_state.auth:
+    st.text_input("パスワードを入力してください", type="password", on_change=check_password, key="pwd")
+    st.stop()
+# ------------------------------------------
 # =========================
 # 自動更新（3分）
 # =========================
