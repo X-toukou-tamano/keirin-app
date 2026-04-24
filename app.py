@@ -10,7 +10,36 @@ from datetime import datetime, timedelta, timezone
 # 自動更新（3分）
 # =========================
 st_autorefresh(interval=180000, key="refresh")
+# =========================
+# パスワード認証機能
+# =========================
+def check_password():
+    """パスワードが正しいか確認する関数"""
+    if "password_correct" not in st.session_state:
+        st.session_state["password_correct"] = False
 
+    if st.session_state["password_correct"]:
+        return True
+
+    # 未認証時の画面表示
+    st.title("玉野競輪 投稿生成アプリ")
+    st.subheader("🔒 社内専用アクセス")
+    password = st.text_input("パスワードを入力してください", type="password")
+    
+    if st.button("ログイン"):
+        # ↓ 実際の運用パスワードに書き換えてください
+        if password == "tamano0401": 
+            st.session_state["password_correct"] = True
+            st.rerun() 
+        else:
+            st.error("パスワードが違います")
+    return False
+
+# 認証が通らない場合はここで処理をストップ
+if check_password():
+    # =========================
+    # メイン画面表示（認証後）
+    # =========================
 st.title("玉野競輪 投稿生成アプリ")
 
 # 今日の日付表示
@@ -347,7 +376,7 @@ def run_live_mode(session, temp_enc):
     return "\n\n----------------------\n\n".join(outputs)
 
 # =========================
-# メイン
+# メインロジック
 # =========================
 def main():
     try:
@@ -377,6 +406,17 @@ def main():
         return f"エラー: {e}"
 
 # =========================
-# 表示
+# 表示（ここが最終的な実行トリガー）
 # =========================
-st.code(main(), language="text")
+# パスワード認証がOKな場合のみ、main()を実行して表示する
+if check_password():
+    # 認証後のメインタイトルや日付表示
+    st.title("玉野競輪 投稿生成アプリ")
+    
+    now = datetime.now(timezone(timedelta(hours=9)))
+    st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # データ取得と表示
+    with st.spinner('データを取得中...'):
+        result_text = main()
+        st.code(result_text, language="text")
