@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 # 自動更新（3分）
 # =========================
 st_autorefresh(interval=180000, key="refresh")
+
 # =========================
 # パスワード認証機能
 # =========================
@@ -24,7 +25,8 @@ def check_password():
     # 未認証時の画面表示
     st.title("玉野競輪 投稿生成アプリ")
     st.subheader("🔒 社内専用アクセス")
-    password = st.text_input("パスワードを入力してください", type="password")
+    # keyを指定して重複エラーを回避
+    password = st.text_input("パスワードを入力してください", type="password", key="login_pass")
     
     if st.button("ログイン"):
         # ↓ 実際の運用パスワードに書き換えてください
@@ -35,28 +37,17 @@ def check_password():
             st.error("パスワードが違います")
     return False
 
-# 認証が通らない場合はここで処理をストップ
-if check_password():
-    # =========================
-    # メイン画面表示（認証後）
-    # =========================
-    st.title("玉野競輪 投稿生成アプリ")
-
-    # 今日の日付表示
-    now = datetime.now(timezone(timedelta(hours=9)))
-    st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
-
-    TARGET_PLACE = "玉野"
-    HASHTAGS = "#玉野けいりん #チャリロトバンク玉野 #競輪"
-
-    HEADERS = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "X-Requested-With": "XMLHttpRequest"
-    }
+# 共通変数の定義（関数の外、認証チェックの前でも後でも参照可能）
+TARGET_PLACE = "玉野"
+HASHTAGS = "#玉野けいりん #チャリロトバンク玉野 #競輪"
+HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "X-Requested-With": "XMLHttpRequest"
+}
 
 # =========================
-# 共通
+# 共通関数
 # =========================
 def normalize_name(name):
     return name.replace("　", "").replace(" ", "")
@@ -129,7 +120,6 @@ def get_prev_encp(session):
 
     infos = get_start_info(row)
     for r in infos:
-
         if r["prev"] == today:
             return r["encp"]
 
@@ -161,11 +151,7 @@ def extract_event_info(html):
         grade = grade_img.get("alt", "")
     return title, grade
 
-# =========================
-# ★ここだけ修正（前日）
-# =========================
 def run_prev_mode(session, encp):
-
     place_name = build_place_name(TARGET_PLACE)
 
     session.get("https://keirin.jp/pc/top", headers=HEADERS)
@@ -178,13 +164,11 @@ def run_prev_mode(session, encp):
     )
 
     html = res.text
-
     match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
     if not match:
         return "PJ0302取得失敗"
 
     data = json.loads(match.group(1))
-
     match_pc = re.search(r"jsonData\['PC0201'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
     title = ""
     if match_pc:
@@ -197,10 +181,8 @@ def run_prev_mode(session, encp):
     for g in data["J0302data"]["J0302gaitei"]:
         for p in g["J0302sensyu"]:
             if "岡　山" in p["hukenName"]:
-
                 name = p["playerNm"]
                 key = normalize_name(name)
-
                 if key in seen:
                     continue
                 seen.add(key)
@@ -236,7 +218,6 @@ def get_live_encp(session):
 
     return None
 
-# ★追加（ここだけ）
 def convert_kubun(val):
     return {
         "1": "D",
@@ -265,14 +246,11 @@ def run_live_mode(session, temp_enc):
         return "開催情報取得失敗"
 
     data = jsj001["C0201data"]
-
     enc = data["encSelParaR"]
     enc_map = {f"{i+1}R": r["encParaR"] for i, r in enumerate(data["C0201race"])}
 
     title = data["raceName"]
-
     day_type = get_kubun_from_top(session)
-
     grade = convert_grade(data["imgGradeAlt"])
     day_label = get_day_label(data["C0201kaisai"])
     place_name = build_place_name(TARGET_PLACE)
@@ -286,7 +264,6 @@ def run_live_mode(session, temp_enc):
         return "結果取得失敗"
 
     outputs = []
-
     for race in result_json["resultList"]:
         if not race["tyakui1List"]:
             continue
@@ -318,7 +295,6 @@ def run_live_mode(session, temp_enc):
         num_text = "-".join(numbers)
 
         enc_r = enc_map.get(race_no)
-
         player_json = session.get(
             f"https://keirin.jp/pc/json?encp={enc_r}&type=JSJ006",
             headers=HEADERS
@@ -342,8 +318,6 @@ def run_live_mode(session, temp_enc):
 
         winner = format_name(result_raw[0][1])
 
-        # --- 修正後のブロック ---
-        
         text = f"""{place_name}
 「{title}」({grade}{day_type})
 {day_label}　第{race_no}　{race_name}　　{num_text}
@@ -408,15 +382,13 @@ def main():
 # =========================
 # 表示（ここが最終的な実行トリガー）
 # =========================
-# パスワード認証がOKな場合のみ、main()を実行して表示する
+# 認証がOKな場合のみ、メイン画面を表示・実行する
 if check_password():
-    # 認証後のメインタイトルや日付表示
     st.title("玉野競輪 投稿生成アプリ")
     
     now = datetime.now(timezone(timedelta(hours=9)))
     st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # データ取得と表示
     with st.spinner('データを取得中...'):
         result_text = main()
         st.code(result_text, language="text")
