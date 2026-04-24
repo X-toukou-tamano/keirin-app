@@ -65,10 +65,11 @@ def build_place_name(place):
     return f"{place}市営{place}競輪"
 
 def get_day_label(kaisai_list):
+    day_label = ""
     for k in kaisai_list:
-        if k["flgSelect"]:
-            return k["txtDaily"].replace("(", "").replace(")", "")
-    return ""
+        if k.get("flgSelect"):
+            day_label = k["txtDaily"].replace("(", "").replace(")", "")
+    return day_label
 
 # ===== 日別フィルタ =====
 def is_day2_target(name):
