@@ -349,12 +349,12 @@ def run_live_mode(session, temp_enc):
             key = normalize_name(winner_name)
             info = player_dict.get(key, {"pref": "不明", "term": "不明"})
 
+            # 修正後のフォーマット：レース名を文章の頭に配置し、日付行から削除
             intro = f"""{place_name}
 「{title}」({grade}{day_type})
+{race_name}勝利選手の写真とレース後のコメントです！
 
-勝利選手の写真とレース後のコメントです！
-
-{day_label}　第{race_no}　{race_name}
+{day_label}　第{race_no}
 {winner_name} 選手（{info['pref']}）{info['term']}期
 「」
 
