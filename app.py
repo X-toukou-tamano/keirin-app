@@ -40,20 +40,20 @@ if check_password():
     # =========================
     # メイン画面表示（認証後）
     # =========================
-st.title("玉野競輪 投稿生成アプリ")
+    st.title("玉野競輪 投稿生成アプリ")
 
-# 今日の日付表示
-now = datetime.now(timezone(timedelta(hours=9)))
-st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+    # 今日の日付表示
+    now = datetime.now(timezone(timedelta(hours=9)))
+    st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
 
-TARGET_PLACE = "玉野"
-HASHTAGS = "#玉野けいりん #チャリロトバンク玉野 #競輪"
+    TARGET_PLACE = "玉野"
+    HASHTAGS = "#玉野けいりん #チャリロトバンク玉野 #競輪"
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0",
-    "Accept": "application/json, text/javascript, */*; q=0.01",
-    "X-Requested-With": "XMLHttpRequest"
-}
+    HEADERS = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "X-Requested-With": "XMLHttpRequest"
+    }
 
 # =========================
 # 共通
