@@ -281,18 +281,9 @@ def run_live_mode(session, temp_enc):
         race_no = race["rclblRaceNo"]
         race_name = race["rclblSyumokuName"]
 
-        if "初日" in day_label:
-            pass
-        elif "2日目" in day_label:
-            if not is_day2_target(race_name):
-                continue
-        elif "3日目" in day_label:
-            if not is_day3_target(race_name):
-                continue
-        elif "最終日" in day_label:
-            if not is_day4_target(race_name):
-                continue
-
+        # ---------------------------------------------------------
+        # 1. 結果報告のテキスト生成 (フィルタをかけずに全レース実行)
+        # ---------------------------------------------------------
         result_raw = []
         for block, pos in [
             ("tyakui1List", 1),
@@ -340,7 +331,20 @@ def run_live_mode(session, temp_enc):
 """
         outputs.append(text)
 
+        # ---------------------------------------------------------
+        # 2. コメント用テンプレートの生成 (ここだけに条件フィルタをかける)
+        # ---------------------------------------------------------
+        is_target_race = False
         if "初日" in day_label:
+            is_target_race = True # 初日は全レース対象
+        elif "2日目" in day_label and is_day2_target(race_name):
+            is_target_race = True
+        elif "3日目" in day_label and is_day3_target(race_name):
+            is_target_race = True
+        elif "最終日" in day_label and is_day4_target(race_name):
+            is_target_race = True
+
+        if is_target_race:
             winner_name = result_raw[0][1]
             key = normalize_name(winner_name)
             info = player_dict.get(key, {"pref": "不明", "term": "不明"})
@@ -359,7 +363,6 @@ def run_live_mode(session, temp_enc):
             outputs.append(intro)
 
     return "\n\n----------------------\n\n".join(outputs)
-
 # =========================
 # メインロジック
 # =========================
