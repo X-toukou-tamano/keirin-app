@@ -68,6 +68,7 @@ def get_day_label(kaisai_list):
     day_label = ""
     for k in kaisai_list:
         if k.get("flgSelect"):
+            # 見つかるたびに上書きすることで、一番新しい(下の)日付を確定させる
             day_label = k["txtDaily"].replace("(", "").replace(")", "")
     return day_label
 
