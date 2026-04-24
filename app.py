@@ -65,10 +65,21 @@ def build_place_name(place):
     return f"{place}市営{place}競輪"
 
 def get_day_label(kaisai_list):
+    # 1. 今日の日付（例: 04/24）を取得
+    now = datetime.now(timezone(timedelta(hours=9)))
+    today_str = now.strftime("%m/%d")
+    
+    # 2. リストの中から「txtEventDate」が今日と一致するものを探す
     for k in kaisai_list:
-        if k["flgSelect"]:
+        if k.get("txtEventDate") == today_str:
             return k["txtDaily"].replace("(", "").replace(")", "")
-    return ""
+    
+    # 3. もし日付が一致しない場合の予備（最後に見つかったflgSelectを拾う）
+    res = ""
+    for k in kaisai_list:
+        if k.get("flgSelect"):
+            res = k["txtDaily"].replace("(", "").replace(")", "")
+    return res
 
 # ===== 日別フィルタ =====
 def is_day2_target(name):
