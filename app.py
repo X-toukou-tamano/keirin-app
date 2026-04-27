@@ -171,7 +171,7 @@ def extract_event_info(html):
     return title, grade
 
 def run_prev_mode(session, encp):
-    # 1. ページデータの取得
+    # ページデータの取得
     session.get("https://keirin.jp/pc/top", headers=HEADERS)
     session.get("https://keirin.jp/pc/raceschedule", headers=HEADERS)
 
@@ -189,51 +189,38 @@ def run_prev_mode(session, encp):
 
     data = json.loads(match.group(1))
 
-    # デバッグ表示
-    with st.expander("デバッグ: PJ0302 (概定番組) 生データ"):
-        st.json(data)
+    # --- デバッグ出力 (st.json) は削除しました ---
 
-    # 2. PC0201からレースタイトルを取得
+    # 1. PC0201からレースタイトルを取得
     match_pc = re.search(r"jsonData\['PC0201'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
     title = ""
     if match_pc:
         pc = json.loads(match_pc.group(1))
         title = pc.get("C0201data", {}).get("raceName", "")
 
-    # 3. 主催と場所の判定ロジック
-    # タイトルに「高松」が含まれていれば高松主催、場所はTARGET_PLACE（玉野）
-    j03_main = data.get("J0302data", {})
-    
-    # 動的な主催者判定（高松市営玉野競輪対応）
-    if "高松" in title:
-        organizer = "高松"
-    else:
-        organizer = TARGET_PLACE
-    
-    # 1行目の場所名を生成
-    place_name = f"{organizer}市営{TARGET_PLACE}競輪"
+    # 2. 主催者と場所名の判定（高松市営玉野競輪対応）
+    # 共通関数 build_place_name(TARGET_PLACE, title) を呼び出す形に集約
+    place_name = build_place_name(TARGET_PLACE, title)
 
-    # 4. グレード・付加情報の整形（データ欠落時の空カッコ対策）
+    # 3. グレード・付加情報の整形（空カッコ対策）
+    j03_main = data.get("J0302data", {})
     grade_raw = j03_main.get("imgGradeAlt", "")
     fuka_raw = j03_main.get("imgFuka1Alt", "")
     
     grade_formatted = convert_grade(str(grade_raw)) if grade_raw else ""
     fuka_formatted = convert_day_type_from_icon(str(fuka_raw)) if fuka_raw else ""
 
-    # 両方空ならgrade_info自体を空にする。あればカッコで括る
-    if grade_formatted or fuka_formatted:
-        grade_info = f"({grade_formatted}{fuka_formatted})"
-    else:
-        grade_info = ""
+    # 中身がある場合のみカッコを生成
+    grade_info = f"({grade_formatted}{fuka_formatted})" if grade_formatted or fuka_formatted else ""
 
-    # 5. 投稿文生成（岡山選手のみ抽出）
+    # 4. 投稿文生成（岡山選手のみ抽出）
     outputs = []
     seen = set()
     gaitei_list = j03_main.get("J0302gaitei", [])
     
     for g in gaitei_list:
         for p in g.get("J0302sensyu", []):
-            # 表記揺れ（岡　山 / 岡山）を考慮して空白除去
+            # 県名の表記揺れ（岡　山 / 岡山）を考慮
             huken = p.get("hukenName", "").replace(" ", "").replace("　", "")
             if "岡山" in huken:
                 name = p.get("playerNm", "不明")
