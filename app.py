@@ -175,31 +175,48 @@ def run_prev_mode(session, encp):
     )
 
     html = res.text
+    # 概定番組JSONの抽出
     match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
     if not match:
         return "PJ0302取得失敗"
 
     data = json.loads(match.group(1))
+    
+    # 階層のズレに対応するため .get() を徹底
+    j03_main = data.get("J0302data", {})
+    
+    # タイトル情報の取得
     match_pc = re.search(r"jsonData\['PC0201'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
     title = ""
     if match_pc:
         pc = json.loads(match_pc.group(1))
-        title = pc["C0201data"]["raceName"]
+        title = pc.get("C0201data", {}).get("raceName", "")
+
+    # グレード情報の安全な取得
+    grade_val = j03_main.get("imgGradeAlt", "")
+    fuka_val = j03_main.get("imgFuka1Alt", "")
+    
+    grade_str = convert_grade(str(grade_val))
+    day_type_str = convert_day_type_from_icon(str(fuka_val))
 
     outputs = []
     seen = set()
 
-    for g in data["J0302data"]["J0302gaitei"]:
-        for p in g["J0302sensyu"]:
-            if "岡　山" in p["hukenName"]:
-                name = p["playerNm"]
+    # 選手リストのループ
+    gaitei_list = j03_main.get("J0302gaitei", [])
+    for g in gaitei_list:
+        for p in g.get("J0302sensyu", []):
+            # "岡　山" / "岡山" どちらにも対応
+            huken = p.get("hukenName", "").replace(" ", "").replace("　", "")
+            if "岡山" in huken:
+                name = p.get("playerNm", "不明")
                 key = normalize_name(name)
                 if key in seen:
                     continue
                 seen.add(key)
 
                 text = f"""{place_name}
-「{title}」({convert_grade(data['J0302data']['imgGradeAlt'])}{convert_day_type_from_icon(data['J0302data']['imgFuka1Alt'])})
+「{title}」({grade_str}{day_type_str})
 地元選手より、意気込みをいただきました！
 {name}選手 「」
 {HASHTAGS}
