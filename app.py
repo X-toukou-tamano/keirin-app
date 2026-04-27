@@ -61,8 +61,16 @@ def convert_day_type_from_icon(val):
 def convert_grade(grade):
     return grade.replace("1","Ⅰ").replace("2","Ⅱ").replace("3","Ⅲ").replace("4","Ⅳ")
 
-def build_place_name(place):
-    return f"{place}市営{place}競輪"
+# =========================
+# 共通関数（修正版）
+# =========================
+def build_place_name(place, title=""):
+    """
+    タイトルに『高松』が含まれる場合は『高松市営玉野競輪』を返す。
+    それ以外は通常の『玉野市営玉野競輪』。
+    """
+    organizer = "高松" if "高松" in title else place
+    return f"{organizer}市営{place}競輪"
 
 def get_day_label(kaisai_list):
     # 1. 今日の日付（例: 04/24）を取得
@@ -81,7 +89,7 @@ def get_day_label(kaisai_list):
             res = k["txtDaily"].replace("(", "").replace(")", "")
     return res
 
-# ===== 日別フィルタ =====
+# ===== 日別フィルタ（変更なし） =====
 def is_day2_target(name):
     return ("準決" in name) or ("二予" in name) or ("ガ予２" in name)
 
@@ -163,9 +171,7 @@ def extract_event_info(html):
     return title, grade
 
 def run_prev_mode(session, encp):
-    # 初期値（万が一失敗した時の予備）
-    place_name = f"{TARGET_PLACE}市営{TARGET_PLACE}競輪"
-
+    # 1. ページデータの取得
     session.get("https://keirin.jp/pc/top", headers=HEADERS)
     session.get("https://keirin.jp/pc/raceschedule", headers=HEADERS)
 
@@ -183,44 +189,51 @@ def run_prev_mode(session, encp):
 
     data = json.loads(match.group(1))
 
-    # =========================================================
-    # デバッグ出力: PJ0302の内容を確認するためにStreamlitに表示
-    # =========================================================
+    # デバッグ表示
     with st.expander("デバッグ: PJ0302 (概定番組) 生データ"):
         st.json(data)
 
-    # 1. PC0201からレースタイトルを取得
+    # 2. PC0201からレースタイトルを取得
     match_pc = re.search(r"jsonData\['PC0201'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
     title = ""
     if match_pc:
         pc = json.loads(match_pc.group(1))
         title = pc.get("C0201data", {}).get("raceName", "")
 
-    # 2. 【重要】主催と場所の判定ロジック
-    # PJ0302の中の開催情報（kaisaicdやフィールド）から主催を特定
-    # 現状、タイトルに「高松」が含まれていれば高松主催と判断する例
+    # 3. 主催と場所の判定ロジック
+    # タイトルに「高松」が含まれていれば高松主催、場所はTARGET_PLACE（玉野）
     j03_main = data.get("J0302data", {})
     
-    # 仮にタイトルに「高松」があり、場所が「玉野」の場合の対応
+    # 動的な主催者判定（高松市営玉野競輪対応）
     if "高松" in title:
         organizer = "高松"
     else:
         organizer = TARGET_PLACE
     
-    # 最終的な場所名を合成（高松市営玉野競輪など）
+    # 1行目の場所名を生成
     place_name = f"{organizer}市営{TARGET_PLACE}競輪"
 
-    # --- 以下、投稿文生成 ---
-    grade_formatted = convert_grade(str(j03_main.get("imgGradeAlt", "")))
-    fuka_formatted = convert_day_type_from_icon(str(j03_main.get("imgFuka1Alt", "")))
-    grade_info = f"({grade_formatted}{fuka_formatted})" if grade_formatted or fuka_formatted else ""
+    # 4. グレード・付加情報の整形（データ欠落時の空カッコ対策）
+    grade_raw = j03_main.get("imgGradeAlt", "")
+    fuka_raw = j03_main.get("imgFuka1Alt", "")
+    
+    grade_formatted = convert_grade(str(grade_raw)) if grade_raw else ""
+    fuka_formatted = convert_day_type_from_icon(str(fuka_raw)) if fuka_raw else ""
 
+    # 両方空ならgrade_info自体を空にする。あればカッコで括る
+    if grade_formatted or fuka_formatted:
+        grade_info = f"({grade_formatted}{fuka_formatted})"
+    else:
+        grade_info = ""
+
+    # 5. 投稿文生成（岡山選手のみ抽出）
     outputs = []
     seen = set()
     gaitei_list = j03_main.get("J0302gaitei", [])
     
     for g in gaitei_list:
         for p in g.get("J0302sensyu", []):
+            # 表記揺れ（岡　山 / 岡山）を考慮して空白除去
             huken = p.get("hukenName", "").replace(" ", "").replace("　", "")
             if "岡山" in huken:
                 name = p.get("playerNm", "不明")
@@ -228,6 +241,7 @@ def run_prev_mode(session, encp):
                 if key in seen: continue
                 seen.add(key)
 
+                # テンプレート組み立て
                 text = f"""{place_name}
 「{title}」{grade_info}
 地元選手より、意気込みをいただきました！
