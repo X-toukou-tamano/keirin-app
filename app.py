@@ -163,7 +163,8 @@ def extract_event_info(html):
     return title, grade
 
 def run_prev_mode(session, encp):
-    place_name = build_place_name(TARGET_PLACE)
+    # 初期値（万が一失敗した時の予備）
+    place_name = f"{TARGET_PLACE}市営{TARGET_PLACE}競輪"
 
     session.get("https://keirin.jp/pc/top", headers=HEADERS)
     session.get("https://keirin.jp/pc/raceschedule", headers=HEADERS)
@@ -175,48 +176,60 @@ def run_prev_mode(session, encp):
     )
 
     html = res.text
-    # 概定番組JSONの抽出
+    # jsonData['PJ0302'] を抽出
     match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
     if not match:
         return "PJ0302取得失敗"
 
     data = json.loads(match.group(1))
-    
-    # 階層のズレに対応するため .get() を徹底
-    j03_main = data.get("J0302data", {})
-    
-    # タイトル情報の取得
+
+    # =========================================================
+    # デバッグ出力: PJ0302の内容を確認するためにStreamlitに表示
+    # =========================================================
+    with st.expander("デバッグ: PJ0302 (概定番組) 生データ"):
+        st.json(data)
+
+    # 1. PC0201からレースタイトルを取得
     match_pc = re.search(r"jsonData\['PC0201'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
     title = ""
     if match_pc:
         pc = json.loads(match_pc.group(1))
         title = pc.get("C0201data", {}).get("raceName", "")
 
-    # グレード情報の安全な取得
-    grade_val = j03_main.get("imgGradeAlt", "")
-    fuka_val = j03_main.get("imgFuka1Alt", "")
+    # 2. 【重要】主催と場所の判定ロジック
+    # PJ0302の中の開催情報（kaisaicdやフィールド）から主催を特定
+    # 現状、タイトルに「高松」が含まれていれば高松主催と判断する例
+    j03_main = data.get("J0302data", {})
     
-    grade_str = convert_grade(str(grade_val))
-    day_type_str = convert_day_type_from_icon(str(fuka_val))
+    # 仮にタイトルに「高松」があり、場所が「玉野」の場合の対応
+    if "高松" in title:
+        organizer = "高松"
+    else:
+        organizer = TARGET_PLACE
+    
+    # 最終的な場所名を合成（高松市営玉野競輪など）
+    place_name = f"{organizer}市営{TARGET_PLACE}競輪"
+
+    # --- 以下、投稿文生成 ---
+    grade_formatted = convert_grade(str(j03_main.get("imgGradeAlt", "")))
+    fuka_formatted = convert_day_type_from_icon(str(j03_main.get("imgFuka1Alt", "")))
+    grade_info = f"({grade_formatted}{fuka_formatted})" if grade_formatted or fuka_formatted else ""
 
     outputs = []
     seen = set()
-
-    # 選手リストのループ
     gaitei_list = j03_main.get("J0302gaitei", [])
+    
     for g in gaitei_list:
         for p in g.get("J0302sensyu", []):
-            # "岡　山" / "岡山" どちらにも対応
             huken = p.get("hukenName", "").replace(" ", "").replace("　", "")
             if "岡山" in huken:
                 name = p.get("playerNm", "不明")
                 key = normalize_name(name)
-                if key in seen:
-                    continue
+                if key in seen: continue
                 seen.add(key)
 
                 text = f"""{place_name}
-「{title}」({grade_str}{day_type_str})
+「{title}」{grade_info}
 地元選手より、意気込みをいただきました！
 {name}選手 「」
 {HASHTAGS}
