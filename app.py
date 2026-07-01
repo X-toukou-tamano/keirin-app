@@ -296,7 +296,9 @@ def run_live_mode(session, temp_enc):
     day_type = get_kubun_from_top(session)
     grade = convert_grade(data["imgGradeAlt"])
     day_label = get_day_label(data["C0201kaisai"])
-    place_name = build_place_name(TARGET_PLACE, title)
+
+    organizer = get_organizer(EXCEL_PATH, 開催開始日)
+    place_name = f"{organizer}市営玉野競輪"
 
     result_json = session.get(
         f"https://keirin.jp/pc/json?encp={enc}&disp=PJ0306&type=JSJ018",
