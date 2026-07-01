@@ -200,7 +200,8 @@ def run_prev_mode(session, encp):
 
     # 2. 主催者と場所名の判定（高松市営玉野競輪対応）
     # 共通関数 build_place_name(TARGET_PLACE, title) を呼び出す形に集約
-    place_name = build_place_name(TARGET_PLACE, title)
+    organizer = get_organizer(excel_path, 開催開始日)
+    place_name = f"{organizer}市営玉野競輪"
 
     # 3. グレード・付加情報の整形（空カッコ対策）
     j03_main = data.get("J0302data", {})
