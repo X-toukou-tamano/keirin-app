@@ -200,8 +200,7 @@ def run_prev_mode(session, encp):
 
     # 2. 主催者と場所名の判定（高松市営玉野競輪対応）
     # 共通関数 build_place_name(TARGET_PLACE, title) を呼び出す形に集約
-    organizer = get_organizer(excel_path, 開催開始日)
-    place_name = f"{organizer}市営玉野競輪"
+    place_name = get_place_name_from_excel(...)
 
     # 3. グレード・付加情報の整形（空カッコ対策）
     j03_main = data.get("J0302data", {})
@@ -297,8 +296,7 @@ def run_live_mode(session, temp_enc):
     grade = convert_grade(data["imgGradeAlt"])
     day_label = get_day_label(data["C0201kaisai"])
 
-    organizer = get_organizer(EXCEL_PATH, 開催開始日)
-    place_name = f"{organizer}市営玉野競輪"
+    place_name = get_place_name_from_excel(...)
 
     result_json = session.get(
         f"https://keirin.jp/pc/json?encp={enc}&disp=PJ0306&type=JSJ018",
