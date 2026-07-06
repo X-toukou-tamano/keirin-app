@@ -243,9 +243,15 @@ def run_prev_mode(session, encp):
     info = get_place_info(f"{year}-{month:02d}-{day:02d}")
 
     if info:
-        place_name = f'{info["organizer"]}市営{info["venue"]}競輪'
+        if info["venue"] != "玉野":
+            return "開催なし"
+
+        if info["organizer"] == "玉野":
+            place_name = "玉野競輪"
+        else:
+            place_name = f'{info["organizer"]}市営玉野競輪'
     else:
-        place_name = "玉野市営玉野競輪"
+        return "開催なし"
 
     # 3. グレード・付加情報の整形（空カッコ対策）
     j03_main = data.get("J0302data", {})
@@ -356,9 +362,15 @@ def run_live_mode(session, temp_enc):
     info = get_place_info(f"{year}-{month:02d}-{day:02d}")
 
     if info:
-        place_name = f'{info["organizer"]}市営{info["venue"]}競輪'
+        if info["venue"] != "玉野":
+            return "開催なし"
+
+        if info["organizer"] == "玉野":
+            place_name = "玉野競輪"
+        else:
+            place_name = f'{info["organizer"]}市営玉野競輪'
     else:
-        place_name = "玉野市営玉野競輪"
+        return "開催なし"
 
     result_json = session.get(
         f"https://keirin.jp/pc/json?encp={enc}&disp=PJ0306&type=JSJ018",
