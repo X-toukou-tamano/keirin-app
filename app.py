@@ -147,17 +147,62 @@ def get_start_info(row):
     tds = row.find_all("td", class_="td_day")
     day = 1
     result = []
+
     for td in tds:
         classes = td.get("class", [])
         colspan = int(td.get("colspan", 1))
+
         if "bk_kaisai" in classes:
             a = td.find("a")
             if a:
-                encp = a.get("data-pprm-encp")
-                result.append({"start": day, "prev": day - 1, "encp": encp})
-        day += colspan
-    return result
+                result.append({
+                    "start": day,
+                    "end": day + colspan - 1,
+                    "prev": day - 1,
+                    "encp": a.get("data-pprm-encp"),
+                    "dkbn": a.get("data-pprm-dkbn"),
+                })
 
+        day += colspan
+
+    return result
+def get_schedule_info(session):
+    now = datetime.now(timezone(timedelta(hours=9)))
+    target = now + timedelta(days=1)
+
+    year = target.year
+    month = target.month
+    day = target.day
+
+    html = get_html(session, year, month)
+    row = get_target_row(html)
+    if not row:
+        return None
+
+    tds = row.find_all("td", class_="td_day")
+
+    current_day = 1
+
+    for td in tds:
+        colspan = int(td.get("colspan", 1))
+        classes = td.get("class", [])
+
+        if "bk_kaisai" in classes:
+            start_day = current_day
+            end_day = current_day + colspan - 1
+
+            if start_day - 1 <= day <= end_day:
+                day_no = day - start_day + 1
+
+                return {
+                    "day": day_no,
+                    "is_first": day_no == 1,
+                    "is_final": day == end_day,
+                }
+
+        current_day += colspan
+
+    return None
 def get_prev_encp(session):
     now = datetime.now(timezone(timedelta(hours=9)))
     today, month, year = now.day, now.month, now.year
