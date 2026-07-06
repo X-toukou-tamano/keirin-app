@@ -198,15 +198,17 @@ def run_prev_mode(session, encp):
         pc = json.loads(match_pc.group(1))
         title = pc.get("C0201data", {}).get("raceName", "")
 
-    # 2. 主催者と場所名の判定（高松市営玉野競輪対応）
-    # 共通関数 build_place_name(TARGET_PLACE, title) を呼び出す形に集約
-    place_name = get_place_name_from_excel(EXCEL_PATH, encp)
+    # 2. 主催者名の判定
+    if "高松" in title:
+        place_name = "高松市営玉野競輪"
+    else:
+        place_name = "玉野市営玉野競輪"
 
     # 3. グレード・付加情報の整形（空カッコ対策）
     j03_main = data.get("J0302data", {})
     grade_raw = j03_main.get("imgGradeAlt", "")
     fuka_raw = j03_main.get("imgFuka1Alt", "")
-    
+
     grade_formatted = convert_grade(str(grade_raw)) if grade_raw else ""
     fuka_formatted = convert_day_type_from_icon(str(fuka_raw)) if fuka_raw else ""
 
@@ -216,19 +218,20 @@ def run_prev_mode(session, encp):
     # 4. 投稿文生成（岡山選手のみ抽出）
     outputs = []
     seen = set()
-    gaitei_list = j03_main.get("J0302gaitei", [])
-    
+    gaitei_list = j03_main.get("J0302data", {}).get("J0302gaitei", [])
+    if not gaitei_list:
+        gaitei_list = j03_main.get("J0302gaitei", [])
+
     for g in gaitei_list:
         for p in g.get("J0302sensyu", []):
-            # 県名の表記揺れ（岡　山 / 岡山）を考慮
             huken = p.get("hukenName", "").replace(" ", "").replace("　", "")
             if "岡山" in huken:
                 name = p.get("playerNm", "不明")
                 key = normalize_name(name)
-                if key in seen: continue
+                if key in seen:
+                    continue
                 seen.add(key)
 
-                # テンプレート組み立て
                 text = f"""{place_name}
 「{title}」{grade_info}
 地元選手より、意気込みをいただきました！
