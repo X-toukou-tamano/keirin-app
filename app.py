@@ -276,8 +276,6 @@ def run_prev_mode(session, encp):
 
     data = json.loads(match.group(1))
 
-    # --- デバッグ出力 (st.json) は削除しました ---
-
     # 1. PC0201からレースタイトルを取得
     match_pc = re.search(r"jsonData\['PC0201'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
     title = ""
@@ -290,14 +288,19 @@ def run_prev_mode(session, encp):
     month, day = map(int, start.split("/"))
 
     today = datetime.now(timezone(timedelta(hours=9)))
-
     year = today.year
 
     # 1～3月は翌年扱い
     if month < 4:
         year += 1
 
-    info = get_place_info(f"{year}-{month:02d}-{day:02d}")
+    target_date = f"{year}-{month:02d}-{day:02d}"
+    info = get_place_info(target_date)
+
+    # ===== デバッグ =====
+    st.write("target_date =", target_date)
+    st.write("info =", info)
+    # ====================
 
     if info:
         if info["venue"] != "玉野":
