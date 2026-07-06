@@ -284,34 +284,7 @@ def run_prev_mode(session, encp):
         title = pc.get("C0201data", {}).get("raceName", "")
 
     # 2. 主催者名の判定
-    start = pc["C0201data"]["C0201kaisai"][0]["txtEventDate"]
-    month, day = map(int, start.split("/"))
-
-    today = datetime.now(timezone(timedelta(hours=9)))
-    year = today.year
-
-    # 1～3月は翌年扱い
-    if month < 4:
-        year += 1
-
-    target_date = f"{year}-{month:02d}-{day:02d}"
-    info = get_place_info(target_date)
-
-    # ===== デバッグ =====
-    st.write("target_date =", target_date)
-    st.write("info =", info)
-    # ====================
-
-    if info:
-        if info["venue"] != "玉野":
-            return "開催なし"
-
-        if info["organizer"] == "玉野":
-            place_name = "玉野競輪"
-        else:
-            place_name = f'{info["organizer"]}市営玉野競輪'
-    else:
-        return "開催なし"
+    place_name = "玉野競輪"
 
     # 3. グレード・付加情報の整形（空カッコ対策）
     j03_main = data.get("J0302data", {})
