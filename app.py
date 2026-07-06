@@ -5,7 +5,7 @@ import re
 import json
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, timezone
-
+from database import get_place_info
 # =========================
 # 自動更新（3分）
 # =========================
@@ -64,14 +64,6 @@ def convert_grade(grade):
 # =========================
 # 共通関数（修正版）
 # =========================
-def build_place_name(place, title=""):
-    """
-    タイトルに『高松』が含まれる場合は『高松市営玉野競輪』を返す。
-    それ以外は通常の『玉野市営玉野競輪』。
-    """
-    organizer = "高松" if "高松" in title else place
-    return f"{organizer}市営{place}競輪"
-
 def get_day_label(kaisai_list):
     # 1. 今日の日付（例: 04/24）を取得
     now = datetime.now(timezone(timedelta(hours=9)))
@@ -199,8 +191,15 @@ def run_prev_mode(session, encp):
         title = pc.get("C0201data", {}).get("raceName", "")
 
     # 2. 主催者名の判定
-    if "高松" in title:
-        place_name = "高松市営玉野競輪"
+    start = pc["C0201data"]["C0201kaisai"][0]["txtEventDate"]
+    month, day = map(int, start.split("/"))
+
+    today = datetime.now(timezone(timedelta(hours=9)))
+
+    info = get_place_info(f"{year}-{month:02d}-{day:02d}")
+
+    if info:
+        place_name = f'{info["organizer"]}市営{info["venue"]}競輪'
     else:
         place_name = "玉野市営玉野競輪"
 
@@ -299,8 +298,23 @@ def run_live_mode(session, temp_enc):
     grade = convert_grade(data["imgGradeAlt"])
     day_label = get_day_label(data["C0201kaisai"])
 
-    info = get_place_info(...)
-    place_name = f'{info["organizer"]}市営{info["venue"]}競輪'
+    # 開催初日を YYYY-MM-DD に変換
+    start = data["C0201kaisai"][0]["txtEventDate"]  # MM/DD
+    month, day = map(int, start.split("/"))
+
+    today = datetime.now(timezone(timedelta(hours=9)))
+    year = today.year
+
+    # 1～3月は翌年扱い
+    if month < 4:
+        year += 1
+
+    info = get_place_info(f"{year}-{month:02d}-{day:02d}")
+
+    if info:
+        place_name = f'{info["organizer"]}市営{info["venue"]}競輪'
+    else:
+        place_name = "玉野市営玉野競輪"
 
     result_json = session.get(
         f"https://keirin.jp/pc/json?encp={enc}&disp=PJ0306&type=JSJ018",
