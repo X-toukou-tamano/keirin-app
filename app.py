@@ -9,16 +9,30 @@ import sqlite3
 
 DB_PATH = "tv_schedule.db"
 
+DB_URL = "https://raw.githubusercontent.com/X-toukou-tamano/tv-schedule-generator/main/src/tv_schedule.db"
+
+
+def download_db():
+    response = requests.get(DB_URL, timeout=30)
+    response.raise_for_status()
+
+    with open(DB_PATH, "wb") as f:
+        f.write(response.content)
+
+
 def get_place_info(event_date):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT organizer, venue_name
         FROM calendar_events
         WHERE event_date = ?
         LIMIT 1
-    """, (event_date,))
+        """,
+        (event_date,),
+    )
 
     row = cursor.fetchone()
     conn.close()
@@ -448,6 +462,9 @@ def run_live_mode(session, temp_enc):
 # =========================
 def main():
     try:
+        # 最新DBをGitHubから取得
+        download_db()
+
         session = requests.Session()
 
         top_res = session.get("https://keirin.jp/pc/top", headers=HEADERS)
@@ -457,7 +474,10 @@ def main():
             live_list = top.get("RaceList", [])
             if live_list:
                 auth_encp = live_list[0].get("touhyouLivePara")
-                auth_url = f"https://keirin.jp/pc/json?encp={auth_encp}&type=JSJ048&kanyusyaflg=1&kaisaikbikbn=1"
+                auth_url = (
+                    f"https://keirin.jp/pc/json?encp={auth_encp}"
+                    "&type=JSJ048&kanyusyaflg=1&kaisaikbikbn=1"
+                )
                 session.get(auth_url, headers=HEADERS)
 
         live_encp = get_live_encp(session)
