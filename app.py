@@ -5,7 +5,31 @@ import re
 import json
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, timezone
-from database import get_place_info
+import sqlite3
+
+DB_PATH = "tv_schedule.db"
+
+def get_place_info(event_date):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT organizer, venue_name
+        FROM calendar_events
+        WHERE event_date = ?
+        LIMIT 1
+    """, (event_date,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if row is None:
+        return None
+
+    return {
+        "organizer": row[0],
+        "venue": row[1],
+    }
 # =========================
 # 自動更新（3分）
 # =========================
@@ -195,6 +219,12 @@ def run_prev_mode(session, encp):
     month, day = map(int, start.split("/"))
 
     today = datetime.now(timezone(timedelta(hours=9)))
+
+    year = today.year
+
+    # 1～3月は翌年扱い
+    if month < 4:
+        year += 1
 
     info = get_place_info(f"{year}-{month:02d}-{day:02d}")
 
