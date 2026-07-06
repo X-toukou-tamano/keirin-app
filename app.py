@@ -213,12 +213,24 @@ def get_prev_encp(session):
         return None
 
     infos = get_start_info(row)
+
+    # デバッグ表示
+    st.write("today =", today)
+    st.write(infos)
+
     for r in infos:
         if r["prev"] == today:
+            st.write("前日一致", r)
             return r["encp"]
 
-        last_day = (now.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-        if today == last_day.day and r["start"] == 1:
+        # 月またぎ対応
+        last_day = (
+            (now.replace(day=28) + timedelta(days=4))
+            .replace(day=1) - timedelta(days=1)
+        ).day
+
+        if today == last_day and r["start"] == 1:
+            st.write("月またぎ一致", r)
             return r["encp"]
 
     return None
