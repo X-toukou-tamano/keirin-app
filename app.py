@@ -299,7 +299,8 @@ def run_live_mode(session, temp_enc):
     grade = convert_grade(data["imgGradeAlt"])
     day_label = get_day_label(data["C0201kaisai"])
 
-    place_name = get_place_name_from_excel(EXCEL_PATH, temp_enc)
+    info = get_place_info(...)
+    place_name = f'{info["organizer"]}市営{info["venue"]}競輪'
 
     result_json = session.get(
         f"https://keirin.jp/pc/json?encp={enc}&disp=PJ0306&type=JSJ018",
