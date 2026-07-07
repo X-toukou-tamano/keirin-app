@@ -548,6 +548,7 @@ if check_password():
         if prev_encp or live_encp:
             if st.button("⚙ 市営変更"):
                 st.session_state["edit_organizer"] = True
+                st.rerun()
 
     # 前検日で未設定、または市営変更ボタンが押されたら選択画面を表示
     if ((organizer is None and prev_encp) or edit_organizer) and (prev_encp or live_encp):
