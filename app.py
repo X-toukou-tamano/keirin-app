@@ -203,13 +203,8 @@ def get_prev_encp(session):
 
     infos = get_start_info(row)
 
-    # デバッグ表示
-    st.write("today =", today)
-    st.write(infos)
-
     for r in infos:
         if r["prev"] == today:
-            st.write("前日一致", r)
             return r["encp"]
 
         # 月またぎ対応
@@ -219,7 +214,6 @@ def get_prev_encp(session):
         ).day
 
         if today == last_day and r["start"] == 1:
-            st.write("月またぎ一致", r)
             return r["encp"]
 
     return None
@@ -535,29 +529,65 @@ def main():
 # =========================
 # 認証がOKな場合のみ、メイン画面を表示・実行する
 if check_password():
-    st.title("玉野競輪 投稿生成アプリ")
 
     session = requests.Session()
     schedule = get_schedule_info(session)
 
     organizer = load_organizer()
+    live_encp = get_live_encp(session)
     prev_encp = get_prev_encp(session)
+    edit_organizer = st.session_state.get("edit_organizer", False)
 
-    # 前検日で未設定なら選択画面を表示
-    if organizer is None and prev_encp:
+    # タイトル＋右上ボタン用レイアウト
+    left, right = st.columns([8, 2])
+
+    with left:
+        st.title("玉野競輪 投稿生成アプリ")
+
+    with right:
+        if prev_encp or live_encp:
+            if st.button("⚙ 市営変更"):
+                st.session_state["edit_organizer"] = True
+
+    # 前検日で未設定、または市営変更ボタンが押されたら選択画面を表示
+    if ((organizer is None and prev_encp) or edit_organizer) and (prev_encp or live_encp):
         st.warning("今回の市営を選択してください。")
+
+        choices = ["広島", "防府", "高松", "小松島", "高知", "松山"]
+
+        if organizer in choices:
+            default_index = choices.index(organizer)
+        else:
+            default_index = 0
 
         selected = st.selectbox(
             "主催者",
-            ["広島", "防府", "高松", "小松島", "高知", "松山"]
+            choices,
+            index=default_index
         )
 
-        if st.button("保存"):
-            save_organizer(selected)
-            st.success(f"{selected}市営として保存しました。")
-            st.rerun()
+        col1, col2, col3 = st.columns(3)
 
-    elif organizer:
+        with col1:
+            if st.button("保存"):
+                save_organizer(selected)
+                st.session_state["edit_organizer"] = False
+                st.success(f"{selected}市営として保存しました。")
+                st.rerun()
+
+        with col2:
+            if st.button("スキップ（玉野市営）"):
+                save_organizer("玉野")
+                st.session_state["edit_organizer"] = False
+                st.success("玉野市営として保存しました。")
+                st.rerun()
+
+        with col3:
+            if st.button("キャンセル"):
+                st.session_state["edit_organizer"] = False
+                st.rerun()
+
+    if organizer and not edit_organizer:
         st.info(f"現在の設定：{organizer}市営")
 
     now = datetime.now(timezone(timedelta(hours=9)))
