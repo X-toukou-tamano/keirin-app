@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 import requests
@@ -5,45 +6,7 @@ import re
 import json
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, timezone
-import sqlite3
 
-DB_PATH = "tv_schedule.db"
-
-DB_URL = "https://raw.githubusercontent.com/X-toukou-tamano/tv-schedule-generator/main/src/tv_schedule.db"
-
-
-def download_db():
-    response = requests.get(DB_URL, timeout=30)
-    response.raise_for_status()
-
-    with open(DB_PATH, "wb") as f:
-        f.write(response.content)
-
-
-def get_place_info(event_date):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        SELECT organizer, venue_name
-        FROM calendar_events
-        WHERE event_date = ?
-        LIMIT 1
-        """,
-        (event_date,),
-    )
-
-    row = cursor.fetchone()
-    conn.close()
-
-    if row is None:
-        return None
-
-    return {
-        "organizer": row[0],
-        "venue": row[1],
-    }
 # =========================
 # 自動更新（3分）
 # =========================
@@ -83,10 +46,36 @@ HEADERS = {
     "Accept": "application/json, text/javascript, */*; q=0.01",
     "X-Requested-With": "XMLHttpRequest"
 }
-
+ORGANIZER_FILE = "organizer.json"
 # =========================
 # 共通関数
 # =========================
+def load_organizer():
+    if not os.path.exists(ORGANIZER_FILE):
+        return None
+
+    with open(ORGANIZER_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    return data.get("organizer")
+
+
+def save_organizer(name):
+    with open(ORGANIZER_FILE, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "organizer": name
+            },
+            f,
+            ensure_ascii=False,
+            indent=2
+        )
+
+
+def delete_organizer():
+    if os.path.exists(ORGANIZER_FILE):
+        os.remove(ORGANIZER_FILE)
+        
 def normalize_name(name):
     return name.replace("　", "").replace(" ", "")
 
@@ -180,7 +169,6 @@ def get_schedule_info(session):
         return None
 
     tds = row.find_all("td", class_="td_day")
-
     current_day = 1
 
     for td in tds:
@@ -191,7 +179,8 @@ def get_schedule_info(session):
             start_day = current_day
             end_day = current_day + colspan - 1
 
-            if start_day - 1 <= day <= end_day:
+            # 明日が開催期間内か判定
+            if start_day <= day <= end_day:
                 day_no = day - start_day + 1
 
                 return {
@@ -269,6 +258,7 @@ def run_prev_mode(session, encp):
     )
 
     html = res.text
+
     # jsonData['PJ0302'] を抽出
     match = re.search(r"jsonData\['PJ0302'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
     if not match:
@@ -276,17 +266,22 @@ def run_prev_mode(session, encp):
 
     data = json.loads(match.group(1))
 
-    # 1. PC0201からレースタイトルを取得
+    # PC0201からレースタイトルを取得
     match_pc = re.search(r"jsonData\['PC0201'\]\s*=\s*(\{[\s\S]*?\})\s*;", html)
     title = ""
     if match_pc:
         pc = json.loads(match_pc.group(1))
         title = pc.get("C0201data", {}).get("raceName", "")
 
-    # 2. 主催者名の判定
-    place_name = "玉野競輪"
+    # 主催者名の取得
+    organizer = load_organizer()
 
-    # 3. グレード・付加情報の整形（空カッコ対策）
+    if organizer:
+        place_name = f"{organizer}市営玉野競輪"
+    else:
+        place_name = "玉野競輪"
+
+    # グレード・付加情報の整形（空カッコ対策）
     j03_main = data.get("J0302data", {})
     grade_raw = j03_main.get("imgGradeAlt", "")
     fuka_raw = j03_main.get("imgFuka1Alt", "")
@@ -294,12 +289,12 @@ def run_prev_mode(session, encp):
     grade_formatted = convert_grade(str(grade_raw)) if grade_raw else ""
     fuka_formatted = convert_day_type_from_icon(str(fuka_raw)) if fuka_raw else ""
 
-    # 中身がある場合のみカッコを生成
     grade_info = f"({grade_formatted}{fuka_formatted})" if grade_formatted or fuka_formatted else ""
 
-    # 4. 投稿文生成（岡山選手のみ抽出）
+    # 投稿文生成（岡山選手のみ抽出）
     outputs = []
     seen = set()
+
     gaitei_list = j03_main.get("J0302data", {}).get("J0302gaitei", [])
     if not gaitei_list:
         gaitei_list = j03_main.get("J0302gaitei", [])
@@ -310,6 +305,7 @@ def run_prev_mode(session, encp):
             if "岡山" in huken:
                 name = p.get("playerNm", "不明")
                 key = normalize_name(name)
+
                 if key in seen:
                     continue
                 seen.add(key)
@@ -392,18 +388,12 @@ def run_live_mode(session, temp_enc):
     if month < 4:
         year += 1
 
-    info = get_place_info(f"{year}-{month:02d}-{day:02d}")
+    organizer = load_organizer()
 
-    if info:
-        if info["venue"] != "玉野":
-            return "開催なし"
-
-        if info["organizer"] == "玉野":
-            place_name = "玉野競輪"
-        else:
-            place_name = f'{info["organizer"]}市営玉野競輪'
+    if organizer:
+        place_name = f"{organizer}市営玉野競輪"
     else:
-        return "開催なし"
+        place_name = "玉野競輪"
 
     result_json = session.get(
         f"https://keirin.jp/pc/json?encp={enc}&disp=PJ0306&type=JSJ018",
@@ -507,10 +497,12 @@ def run_live_mode(session, temp_enc):
 # =========================
 def main():
     try:
-        # 最新DBをGitHubから取得
-        download_db()
-
         session = requests.Session()
+
+        # 開催終了翌日に市営設定をリセット
+        schedule = get_schedule_info(session)
+        if schedule is None and load_organizer() is not None:
+            delete_organizer()
 
         top_res = session.get("https://keirin.jp/pc/top", headers=HEADERS)
         match = re.search(r"var pc0101_json = (\{.*?\});", top_res.text, re.DOTALL)
@@ -544,10 +536,33 @@ def main():
 # 認証がOKな場合のみ、メイン画面を表示・実行する
 if check_password():
     st.title("玉野競輪 投稿生成アプリ")
-    
+
+    session = requests.Session()
+    schedule = get_schedule_info(session)
+
+    organizer = load_organizer()
+    prev_encp = get_prev_encp(session)
+
+    # 前検日で未設定なら選択画面を表示
+    if organizer is None and prev_encp:
+        st.warning("今回の市営を選択してください。")
+
+        selected = st.selectbox(
+            "主催者",
+            ["広島", "防府", "高松", "小松島", "高知", "松山"]
+        )
+
+        if st.button("保存"):
+            save_organizer(selected)
+            st.success(f"{selected}市営として保存しました。")
+            st.rerun()
+
+    elif organizer:
+        st.info(f"現在の設定：{organizer}市営")
+
     now = datetime.now(timezone(timedelta(hours=9)))
     st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
-    
-    with st.spinner('データを取得中...'):
+
+    with st.spinner("データを取得中..."):
         result_text = main()
         st.code(result_text, language="text")
