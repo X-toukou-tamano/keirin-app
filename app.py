@@ -493,11 +493,6 @@ def main():
     try:
         session = requests.Session()
 
-        # 開催終了翌日に市営設定をリセット
-        schedule = get_schedule_info(session)
-        if schedule is None and load_organizer() is not None:
-            delete_organizer()
-
         top_res = session.get("https://keirin.jp/pc/top", headers=HEADERS)
         match = re.search(r"var pc0101_json = (\{.*?\});", top_res.text, re.DOTALL)
         if match:
@@ -511,11 +506,17 @@ def main():
                 )
                 session.get(auth_url, headers=HEADERS)
 
+        # 開催状況取得
         live_encp = get_live_encp(session)
+        prev_encp = get_prev_encp(session)
+
+        # 開催も前検もないときだけ市営設定をリセット
+        if live_encp is None and prev_encp is None and load_organizer() is not None:
+            delete_organizer()
+
         if live_encp:
             return run_live_mode(session, live_encp)
 
-        prev_encp = get_prev_encp(session)
         if prev_encp:
             return run_prev_mode(session, prev_encp)
 
