@@ -517,9 +517,11 @@ def main():
         live_encp = get_live_encp(session)
         prev_encp = get_prev_encp(session)
 
-        # 開催も前検もないときだけ市営設定をリセット
-        if live_encp is None and prev_encp is None and load_organizer() is not None:
-            delete_organizer()
+        # 開催終了翌日に市営設定をリセット
+        if live_encp is None and prev_encp is None:
+            organizer = load_organizer()
+            if organizer is not None:
+                delete_organizer()
 
         if live_encp:
             return run_live_mode(session, live_encp)
@@ -559,7 +561,7 @@ if check_password():
                 st.rerun()
 
     # 前検日で未設定、または市営変更ボタンが押されたら選択画面を表示
-    if ((organizer is None and prev_encp) or edit_organizer) and (prev_encp or live_encp):
+    if ((organizer is None and prev_encp) or edit_organizer) and prev_encp:
         st.warning("今回の市営を選択してください。")
 
         choices = ["広島", "防府", "高松", "小松島", "高知", "松山"]
