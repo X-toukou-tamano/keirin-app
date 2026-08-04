@@ -414,10 +414,17 @@ def run_live_mode(session, temp_enc):
             ("tyakui3List", 3)
         ]:
             for p in race.get(block, []):
-                result_raw.append((pos, p["rclblSensyuName"], p["rclblSyaban"]))
+            result_raw.append((pos, p["rclblSensyuName"], p["rclblSyaban"]))
 
-        numbers = [str(x[2]) for x in result_raw]
-        num_text = "-".join(numbers)
+        # 同着対応
+        groups = {}
+        for pos, _, syaban in result_raw:
+            groups.setdefault(pos, []).append(str(syaban))
+
+        num_text = "-".join(
+            "".join(groups[pos])
+            for pos in sorted(groups)
+        )
 
         enc_r = enc_map.get(race_no)
         player_json = session.get(
