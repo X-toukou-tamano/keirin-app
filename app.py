@@ -414,7 +414,7 @@ def run_live_mode(session, temp_enc):
             ("tyakui3List", 3)
         ]:
             for p in race.get(block, []):
-            result_raw.append((pos, p["rclblSensyuName"], p["rclblSyaban"]))
+                result_raw.append((pos, p["rclblSensyuName"], p["rclblSyaban"]))
 
         # 同着対応
         groups = {}
