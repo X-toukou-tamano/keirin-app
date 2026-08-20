@@ -555,7 +555,7 @@ if check_password():
         st.title("玉野競輪 投稿生成アプリ")
 
     with right:
-        if prev_encp or live_encp:
+        if live_encp and organizer is not None:
             if st.button("⚙ 市営変更"):
                 st.session_state["edit_organizer"] = True
                 st.rerun()
