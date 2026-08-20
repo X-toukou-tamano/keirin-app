@@ -279,8 +279,7 @@ def run_prev_mode(session, encp):
     j03_main = data.get("J0302data", {})
     grade_raw = j03_main.get("imgGradeAlt", "")
     fuka_raw = j03_main.get("imgFuka1Alt", "")
-    st.write("grade_raw:", repr(grade_raw))
-    st.write("fuka_raw:", repr(fuka_raw))
+    
     grade_formatted = convert_grade(str(grade_raw)) if grade_raw else ""
     fuka_formatted = convert_day_type_from_icon(str(fuka_raw)) if fuka_raw else ""
 
