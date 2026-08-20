@@ -560,9 +560,9 @@ if check_password():
                 st.session_state["edit_organizer"] = True
                 st.rerun()
 
-    # 前検日で未設定、または市営変更ボタンが押されたら選択画面を表示
-    if ((organizer is None and prev_encp) or edit_organizer) and prev_encp:
-        st.warning("今回の市営を選択してください。")
+    # 前検日・開催中で未設定、または市営変更ボタンが押されたら選択画面を表示
+        if (organizer is None and (prev_encp or live_encp)) or edit_organizer:
+            st.warning("今回の市営を選択してください。")
 
         choices = ["広島", "防府", "高松", "小松島", "高知", "松山"]
 
