@@ -579,27 +579,24 @@ if check_password():
 
         col1, col2, col3 = st.columns(3)
 
-        with col1:
-            if st.button("保存"):
-                save_organizer(selected)
-                st.session_state["edit_organizer"] = False
-                st.success(f"{selected}市営として保存しました。")
-                st.rerun()
+        if st.button("保存", use_container_width=True):
+            save_organizer(selected)
+            st.session_state["edit_organizer"] = False
+            st.success(f"{selected}市営として保存しました。")
+            st.rerun()
 
-        with col2:
-            if st.button("スキップ（玉野市営）"):
-                save_organizer("玉野")
-                st.session_state["edit_organizer"] = False
-                st.success("玉野市営として保存しました。")
-                st.rerun()
+        if st.button("スキップ（玉野市営）", use_container_width=True):
+            save_organizer("玉野")
+            st.session_state["edit_organizer"] = False
+            st.success("玉野市営として保存しました。")
+            st.rerun()
 
-        with col3:
-            if st.button("キャンセル"):
-                st.session_state["edit_organizer"] = False
-                st.rerun()
+        if st.button("キャンセル", use_container_width=True):
+            st.session_state["edit_organizer"] = False
+            st.rerun()
 
-    if organizer and not edit_organizer:
-        st.info(f"現在の設定：{organizer}市営")
+        if organizer and not edit_organizer:
+            st.info(f"現在の設定：{organizer}市営")
 
     now = datetime.now(timezone(timedelta(hours=9)))
     st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
