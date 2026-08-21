@@ -560,51 +560,51 @@ if check_password():
                 st.session_state["edit_organizer"] = True
                 st.rerun()
 
-        # 市営未設定なら、前検日または開催中に設定画面を表示
-need_organizer_setting = (
-    organizer is None
-    and (prev_encp is not None or live_encp is not None)
-)
-
-# 未設定、または「市営変更」を押した場合のみ設定画面を表示
-if need_organizer_setting or edit_organizer:
-    st.warning("今回の市営を選択してください。")
-
-    choices = ["広島", "防府", "高松", "小松島", "高知", "松山"]
-
-    if organizer in choices:
-        default_index = choices.index(organizer)
-    else:
-        default_index = 0
-
-    selected = st.selectbox(
-        "主催者",
-        choices,
-        index=default_index
+    # 市営未設定なら、前検日または開催中に設定画面を表示
+    need_organizer_setting = (
+        organizer is None
+        and (prev_encp is not None or live_encp is not None)
     )
 
-    if st.button("保存", use_container_width=True):
-        save_organizer(selected)
-        st.session_state["edit_organizer"] = False
-        st.success(f"{selected}市営として保存しました。")
-        st.rerun()
+    # 未設定、または「市営変更」を押した場合のみ設定画面を表示
+    if need_organizer_setting or edit_organizer:
+        st.warning("今回の市営を選択してください。")
 
-    if st.button("スキップ（玉野市営）", use_container_width=True):
-        save_organizer("玉野")
-        st.session_state["edit_organizer"] = False
-        st.success("玉野市営として保存しました。")
-        st.rerun()
+        choices = ["広島", "防府", "高松", "小松島", "高知", "松山"]
 
-    if st.button("キャンセル", use_container_width=True):
-        st.session_state["edit_organizer"] = False
-        st.rerun()
+        if organizer in choices:
+            default_index = choices.index(organizer)
+        else:
+            default_index = 0
 
-# 設定画面を開いていないときだけ現在設定を表示
-if organizer and not edit_organizer:
-    st.info(f"現在の設定：{organizer}市営")
+            selected = st.selectbox(
+                "主催者",
+                choices,
+                index=default_index
+            )
 
-    now = datetime.now(timezone(timedelta(hours=9)))
-    st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        if st.button("保存", use_container_width=True):
+            save_organizer(selected)
+            st.session_state["edit_organizer"] = False
+            st.success(f"{selected}市営として保存しました。")
+            st.rerun()
+
+        if st.button("スキップ（玉野市営）", use_container_width=True):
+            save_organizer("玉野")
+            st.session_state["edit_organizer"] = False
+            st.success("玉野市営として保存しました。")
+            st.rerun()
+
+        if st.button("キャンセル", use_container_width=True):
+            st.session_state["edit_organizer"] = False
+            st.rerun()
+
+    # 設定画面を開いていないときだけ現在設定を表示
+    if organizer and not edit_organizer:
+        st.info(f"現在の設定：{organizer}市営")
+
+        now = datetime.now(timezone(timedelta(hours=9)))
+        st.write(f"📅 今日: {now.strftime('%Y-%m-%d %H:%M:%S')}")
 
     with st.spinner("データを取得中..."):
         result_text = main()
